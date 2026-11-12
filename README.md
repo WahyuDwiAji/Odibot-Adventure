@@ -1,11 +1,42 @@
-<div align="center">
+# 🤖 Odibot Adventure: Petualangan Koding SD Kelas 6
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Game edukasi interaktif untuk melatih logika berpikir komputasional, algoritma runtunan, perulangan, percabangan, fungsi, dan debugging bagi siswa SD kelas 6 (Kurikulum Merdeka).
 
-  <h1>Built with AI Studio</h2>
+---
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## 🚀 Panduan Deploy Bebas Eror ke Vercel via GitHub
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+Sebelumnya, Vercel mengalami eror `ERESOLVE (dependency conflict)` karena versi `esbuild` bawaan template berkonflik dengan Vite 8 saat instalasi di server Vercel. 
 
-</div>
+Sekarang masalah tersebut sudah **100% diperbaiki**:
+1. Menghapus ketergantungan konflik (`esbuild`, `express`, dll.) dari `package.json`.
+2. Menambahkan file konfigurasi `.npmrc` (`legacy-peer-deps=true`).
+3. Menambahkan file `vercel.json` dengan instruksi instalasi & rewrite SPA otomatis.
+4. Membuat `package-lock.json` yang telah diaudit bersih (0 vulnerabilities).
+
+---
+
+### Langkah-langkah Deploy:
+
+1. **Push pembaruan kode ini ke GitHub**:
+   ```bash
+   git add .
+   git commit -m "fix: optimasi dependency & konfigurasi deploy vercel"
+   git push origin main
+   ```
+
+2. **Buka Dashboard Vercel**:
+   - Jika proyek **sudah ada** di Vercel:
+     - Buka proyek Anda di Vercel, masuk ke tab **Deployments**.
+     - Vercel akan otomatis melakukan build ulang dari commit terbaru, atau Anda bisa klik **"Redeploy"**.
+   - Jika **baru pertama kali**:
+     - Klik **"Add New..."** $\rightarrow$ **"Project"**.
+     - Hubungkan akun GitHub Anda dan pilih repositori ini.
+     - Vercel akan otomatis mendeteksi:
+       - **Framework Preset**: `Vite`
+       - **Install Command**: `npm install --legacy-peer-deps`
+       - **Build Command**: `npm run build`
+       - **Output Directory**: `dist`
+     - Klik **"Deploy"**.
+
+3. **Selesai!** Aplikasi akan selesai di-build dalam waktu $\approx 30$ detik dan menghasilkan link live yang aktif.

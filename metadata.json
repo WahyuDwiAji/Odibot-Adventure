@@ -1,0 +1,6 @@
+{
+  "name": "KodiBot: Petualangan Koding SD Kelas 6",
+  "description": "Game edukasi interaktif untuk melatih logika berpikir komputasional, algoritma runtunan, perulangan, percabangan, fungsi, dan debugging bagi siswa SD kelas 6.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
