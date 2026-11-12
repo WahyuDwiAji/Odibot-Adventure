@@ -113,13 +113,13 @@ export default function App() {
   const [activeConceptTopic, setActiveConceptTopic] = useState<string | undefined>(undefined);
   const [isMuted, setIsMuted] = useState(() => sounds.getMuted());
 
-  // Auto-Run (Jalan Otomatis) State & Countdown - default TRUE for 6th grade students
+  // Auto-Run (Jalan Otomatis) State & Countdown - default FALSE agar robot tidak jalan-jalan sendiri sebelum siswa selesai
   const [autoRunEnabled, setAutoRunEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('odibot_autorun');
-      return saved === null ? true : saved === 'true';
+      return saved === 'true'; // Default FALSE
     } catch {
-      return true;
+      return false;
     }
   });
   const [autoRunCountdown, setAutoRunCountdown] = useState<number | null>(null);
@@ -724,7 +724,7 @@ export default function App() {
     } catch {}
   }, [autoRunEnabled]);
 
-  // Debounced Auto-Run Effect: automatically test run code when student modifies blocks
+  // Debounced Auto-Run Effect: Hanya aktif bila siswa secara manual menyalakan tombol Jalan Otomatis
   useEffect(() => {
     if (!autoRunEnabled || isSimulating || isVictory || screen !== 'PLAYING') {
       setAutoRunCountdown(null);
@@ -735,13 +735,17 @@ export default function App() {
       return;
     }
 
-    setAutoRunCountdown(1);
+    setAutoRunCountdown(3);
+    const countTimer = setTimeout(() => setAutoRunCountdown(2), 800);
+    const countTimer2 = setTimeout(() => setAutoRunCountdown(1), 1600);
     const timer = setTimeout(() => {
       setAutoRunCountdown(null);
       handleRunCode();
-    }, 900);
+    }, 2400);
 
     return () => {
+      clearTimeout(countTimer);
+      clearTimeout(countTimer2);
       clearTimeout(timer);
     };
   }, [mainBlocks, f1Blocks, f2Blocks, autoRunEnabled, isSimulating, isVictory, screen, handleRunCode]);

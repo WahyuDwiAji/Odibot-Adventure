@@ -1,5 +1,6 @@
 import React from 'react';
 import { sounds } from '../utils/audio';
+import { OdibotMascot } from './OdibotMascot';
 import {
   Play,
   Bug,
@@ -61,9 +62,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       {/* Top Bar Status & Audio Toggle */}
       <header className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-slate-800/80">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 border border-cyan-400/40 flex items-center justify-center text-slate-950 font-black font-display text-lg shadow-md shadow-cyan-500/20">
-            O
-          </div>
+          <OdibotMascot size="sm" />
           <div>
             <h1 className="text-base font-bold tracking-tight text-white font-display flex items-center gap-1.5">
               <span>Odibot Adventure</span>
@@ -163,19 +162,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       {/* Hero Centerpiece with Mascot & Title Lockup */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center max-w-5xl mx-auto px-6 py-6 text-center">
         {/* Mascot Avatar Card with subtle hover float */}
-        <div className="relative mb-4 group cursor-pointer" onClick={onOpenSkinSelector}>
-          <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-amber-500 opacity-70 blur-md group-hover:opacity-100 transition duration-500" />
-          <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden border-2 border-cyan-400/80 shadow-2xl bg-slate-900">
-            <img
-              src="/src/assets/images/kodibot_mascot_hero_1794195289256.jpg"
-              alt="Mascot Robot Odibot"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <div className="absolute -bottom-2 -right-2 px-2 py-0.5 rounded-full bg-slate-950 border border-cyan-400 text-[10px] font-bold text-cyan-300 shadow">
-            Odibot
-          </div>
+        <div className="relative mb-3 cursor-pointer group" onClick={onOpenSkinSelector}>
+          <OdibotMascot size="lg" showBadge className="group-hover:scale-105 transition-transform duration-300" />
         </div>
 
         {/* Bespoke Inline SVG Title Lockup */}

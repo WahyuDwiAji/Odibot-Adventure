@@ -2,6 +2,7 @@ import React from 'react';
 import { LevelDefinition } from '../types/game';
 import { sounds } from '../utils/audio';
 import { Lightbulb, X, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { OdibotMascot } from './OdibotMascot';
 
 interface HintModalProps {
   level: LevelDefinition;
@@ -31,14 +32,7 @@ export const HintModal: React.FC<HintModalProps> = ({ level, onClose }) => {
 
         {/* Mascot Speech Bubble */}
         <div className="flex items-start gap-3 my-4">
-          <div className="w-12 h-12 rounded-xl overflow-hidden border border-cyan-500/50 bg-slate-800 shrink-0">
-            <img
-              src="/src/assets/images/kodibot_mascot_hero_1794195289256.jpg"
-              alt="Kodi"
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          </div>
+          <OdibotMascot size="sm" className="shrink-0" />
           <div className="flex-1 p-3 bg-slate-950 border border-slate-800 rounded-xl rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm">
             <p className="font-semibold text-cyan-300 mb-1">Hai Kapten! Ini tips untuk menyelesaikan misi ini:</p>
             <p>{level.hint}</p>

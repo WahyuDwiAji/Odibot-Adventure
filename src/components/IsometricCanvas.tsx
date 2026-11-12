@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { CommandType, Direction, LevelDefinition, RobotSkinId, TileData } from '../types/game';
 import { ROBOT_SKINS } from './SkinSelectorModal';
+import { OdibotMascot } from './OdibotMascot';
 import { sounds } from '../utils/audio';
 import {
   RotateCw,
@@ -991,14 +992,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
 
       {/* Floating Odibot Mascot Speech Bubble HUD */}
       <div className="absolute top-3 left-3 right-3 sm:right-auto flex items-center gap-2.5 p-2 bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-xl backdrop-blur-md pointer-events-auto max-w-md">
-        <div className="relative w-9 h-9 rounded-xl bg-cyan-950 border border-cyan-400/50 flex items-center justify-center shrink-0 overflow-hidden shadow">
-          <img
-            src="/src/assets/images/kodibot_mascot_hero_1794195289256.jpg"
-            alt="Odibot Avatar"
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-slate-900" />
-        </div>
+        <OdibotMascot size="sm" className="shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
             <span>Odibot Si Robot</span>
