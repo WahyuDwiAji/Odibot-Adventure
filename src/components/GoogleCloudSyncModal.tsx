@@ -3,18 +3,13 @@ import { UserProgress } from '../types/game';
 import { sounds } from '../utils/audio';
 import {
   X,
-  Cloud,
   CheckCircle2,
   RefreshCw,
   Copy,
   Check,
-  Download,
   Upload,
   LogOut,
-  User,
   Shield,
-  Sparkles,
-  Laptop,
 } from 'lucide-react';
 
 interface GoogleCloudSyncModalProps {
@@ -120,7 +115,9 @@ export const GoogleCloudSyncModal: React.FC<GoogleCloudSyncModalProps> = ({
       progress,
     };
     const code = btoa(unescape(encodeURIComponent(JSON.stringify(exportData))));
-    navigator.clipboard.writeText(code);
+    try {
+      navigator.clipboard?.writeText(code).catch(() => {});
+    } catch {}
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2500);
   };
@@ -209,10 +206,13 @@ export const GoogleCloudSyncModal: React.FC<GoogleCloudSyncModalProps> = ({
               {/* Profile Card */}
               <div className="p-4 rounded-xl bg-gradient-to-r from-slate-950 to-slate-900 border border-slate-700/80 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 p-0.5 shrink-0 shadow-md">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 p-0.5 shrink-0 shadow-md flex items-center justify-center">
                     <img
                       src={user.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.email}`}
                       alt={user.displayName}
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }}
                       className="w-full h-full rounded-[10px] bg-slate-900 object-cover"
                     />
                   </div>

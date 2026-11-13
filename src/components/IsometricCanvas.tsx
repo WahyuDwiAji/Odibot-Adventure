@@ -105,7 +105,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
   onManualAction,
   skinId = 'CYAN',
   autoRunCountdown = null,
-  autoRunEnabled = true,
+  autoRunEnabled = false,
 }) => {
   const activeSkin = ROBOT_SKINS.find((s) => s.id === skinId) || ROBOT_SKINS[0];
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -303,6 +303,12 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
 
       const width = rect.width;
       const height = rect.height;
+
+      if (width <= 0 || height <= 0 || displayWidth <= 0 || displayHeight <= 0) {
+        ctx.restore();
+        animationFrameId = requestAnimationFrame(render);
+        return;
+      }
 
       // 1. Draw Deep Space Background
       ctx.fillStyle = '#080C16';
@@ -911,10 +917,11 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [level, tiles, isSimulating, zoom, pan, rotationAngle, perspectiveMode]);
+  }, [level, tiles, isSimulating, zoom, pan, rotationAngle, perspectiveMode, activeSkin]);
 
-  // Mouse pan handlers
+  // Mouse pan handlers (only trigger when dragging the canvas directly, never HUD buttons)
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.target !== canvasRef.current) return;
     isDraggingRef.current = true;
     dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
   };

@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   BookOpen,
   Palette,
-  Cloud,
   CheckCircle2,
 } from 'lucide-react';
 

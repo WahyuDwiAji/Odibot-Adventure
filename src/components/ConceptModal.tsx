@@ -9,8 +9,6 @@ import {
   Boxes,
   GitBranch,
   Bug,
-  Sparkles,
-  ArrowRight,
   Code2,
   ShieldCheck,
   Zap,
@@ -174,7 +172,6 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
   ];
 
   const currentTopic = topics.find((t) => t.id === selectedTopic) || topics[0];
-  const IconComp = currentTopic.icon;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">

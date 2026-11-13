@@ -2,7 +2,6 @@ import React from 'react';
 import { LevelDefinition } from '../types/game';
 import { sounds } from '../utils/audio';
 import {
-  Lightbulb,
   CheckCircle2,
   Circle,
   Sparkles,

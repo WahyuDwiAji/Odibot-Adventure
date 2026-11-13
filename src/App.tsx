@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ALL_LEVELS } from './data/levels';
 import {
   BlockCommand,
@@ -60,17 +60,33 @@ export default function App() {
   const [screen, setScreen] = useState<GameScreen>('TITLE');
   const [currentLevel, setCurrentLevel] = useState<LevelDefinition>(ALL_LEVELS[0]);
 
-  // Saved progress
+  // Saved progress (sanitized so old/corrupt localStorage never crashes)
   const [progress, setProgress] = useState<UserProgress>(() => {
-    try {
-      const saved = localStorage.getItem('kodibot_progress');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
+    const defaultProgress: UserProgress = {
       completedLevels: {},
       currentLevelId: ALL_LEVELS[0].id,
       unlockedZones: ['zone-1'],
     };
+    try {
+      const saved = localStorage.getItem('kodibot_progress');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            ...defaultProgress,
+            ...parsed,
+            completedLevels:
+              parsed.completedLevels && typeof parsed.completedLevels === 'object'
+                ? parsed.completedLevels
+                : {},
+            unlockedZones: Array.isArray(parsed.unlockedZones)
+              ? parsed.unlockedZones
+              : ['zone-1'],
+          };
+        }
+      }
+    } catch {}
+    return defaultProgress;
   });
 
   // Level runtime state
@@ -113,11 +129,12 @@ export default function App() {
   const [activeConceptTopic, setActiveConceptTopic] = useState<string | undefined>(undefined);
   const [isMuted, setIsMuted] = useState(() => sounds.getMuted());
 
-  // Auto-Run (Jalan Otomatis) State & Countdown - default FALSE agar robot tidak jalan-jalan sendiri sebelum siswa selesai
+  // Auto-Run (Jalan Otomatis) State & Countdown - ALWAYS default FALSE with v2 key so old 'true' in localStorage never auto-runs robot
   const [autoRunEnabled, setAutoRunEnabled] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('odibot_autorun');
-      return saved === 'true'; // Default FALSE
+      localStorage.removeItem('odibot_autorun');
+      const saved = localStorage.getItem('odibot_autorun_v2');
+      return saved === 'true';
     } catch {
       return false;
     }
@@ -139,10 +156,17 @@ export default function App() {
   const simulationStepsRef = useRef<ExecutionStep[]>([]);
   const currentStepIndexRef = useRef<number>(0);
   const simulationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const processNextStepRef = useRef<(simResult: SimulationResult) => void>(() => {});
+  const simulationRunIdRef = useRef<number>(0);
+  const lastAutoRunSignatureRef = useRef<string>('');
+  const processNextStepRef = useRef<(simResult: SimulationResult, runId: number) => void>(() => {});
+  const handleRunCodeRef = useRef<() => void>(() => {});
+  const isSimulatingRef = useRef<boolean>(false);
 
   // Load a level and configure initial state
   const loadLevel = useCallback((level: LevelDefinition) => {
+    simulationRunIdRef.current += 1;
+    lastAutoRunSignatureRef.current = '';
+    setAutoRunCountdown(null);
     setCurrentLevel(level);
     setIsSimulating(false);
     setIsVictory(false);
@@ -177,21 +201,25 @@ export default function App() {
     // Khusus tantangan 'Debugging' (isDebuggingChallenge), muat kode yang sengaja salah untuk diperbaiki.
     // Contoh solusi untuk misi biasa tetap bisa dibuka siswa lewat tombol '💡 Contoh Solusi'.
     if (level.isDebuggingChallenge && level.buggySolution) {
-      setMainBlocks(
-        level.buggySolution.main.map((b) => ({
-          ...b,
-          id: 'dbg-' + Math.random().toString(36).substring(2, 7),
-        }))
-      );
-      setF1Blocks(
-        level.buggySolution.f1
-          ? level.buggySolution.f1.map((b) => ({
-              ...b,
-              id: 'dbg-' + Math.random().toString(36).substring(2, 7),
-            }))
-          : []
-      );
+      const buggyMain = level.buggySolution.main.map((b) => ({
+        ...b,
+        id: 'dbg-' + Math.random().toString(36).substring(2, 7),
+      }));
+      const buggyF1 = level.buggySolution.f1
+        ? level.buggySolution.f1.map((b) => ({
+            ...b,
+            id: 'dbg-' + Math.random().toString(36).substring(2, 7),
+          }))
+        : [];
+      setMainBlocks(buggyMain);
+      setF1Blocks(buggyF1);
       setF2Blocks([]);
+      lastAutoRunSignatureRef.current = JSON.stringify({
+        levelId: level.id,
+        mainBlocks: buggyMain,
+        f1Blocks: buggyF1,
+        f2Blocks: [],
+      });
     } else {
       setMainBlocks([]);
       setF1Blocks([]);
@@ -245,6 +273,8 @@ export default function App() {
 
   // Reset current level to beginning without clearing student's code
   const resetLevelState = useCallback(() => {
+    simulationRunIdRef.current += 1;
+    setAutoRunCountdown(null);
     setIsSimulating(false);
     setIsVictory(false);
     setSimulationErrorMessage(null);
@@ -346,7 +376,9 @@ export default function App() {
   }, []);
 
   // Process next step in simulation loop
-  const processNextStep = useCallback((simResult: SimulationResult) => {
+  const processNextStep = useCallback((simResult: SimulationResult, runId: number) => {
+    if (runId !== simulationRunIdRef.current) return;
+
     const steps = simulationStepsRef.current;
     const idx = currentStepIndexRef.current;
 
@@ -412,7 +444,7 @@ export default function App() {
     // Schedule next step with runner reference to prevent stale closures
     const delay = simulationSpeed === 4 ? 130 : simulationSpeed === 2 ? 260 : 520;
     simulationTimerRef.current = setTimeout(() => {
-      processNextStepRef.current(simResult);
+      processNextStepRef.current(simResult, runId);
     }, delay);
   }, [mainBlocks, f1Blocks, f2Blocks, currentLevel, simulationSpeed, executeStep]);
 
@@ -632,8 +664,10 @@ export default function App() {
   // Start running simulation
   const handleRunCode = useCallback(() => {
     if (isSimulating) {
-      // Pause simulation
+      // Stop simulation cleanly
+      simulationRunIdRef.current += 1;
       setIsSimulating(false);
+      setActiveExecutingBlockId(undefined);
       if (simulationTimerRef.current) {
         clearTimeout(simulationTimerRef.current);
         simulationTimerRef.current = null;
@@ -645,16 +679,13 @@ export default function App() {
     sounds.playClick();
 
     if (mainBlocks.length === 0) {
-      // If workspace is empty, auto load starter blocks if level provides them!
-      if (currentLevel.starterBlocks) {
-        handleLoadStarterCode();
-      }
-      setSimulationErrorMessage('Susun balok perintah di Program Utama untuk menjalankan Kodi!');
+      setSimulationErrorMessage('Susun minimal 1 balok perintah di Program Utama sebelum menjalankan Odibot!');
       return;
     }
 
     // Run simulation algorithm
     const simResult = runSimulation(currentLevel, mainBlocks, f1Blocks, f2Blocks);
+    const runId = ++simulationRunIdRef.current;
     simulationStepsRef.current = simResult.steps;
     currentStepIndexRef.current = 0;
     setIsSimulating(true);
@@ -662,7 +693,7 @@ export default function App() {
 
     // Give 180ms delay so reset takes effect visually before playing step 0
     simulationTimerRef.current = setTimeout(() => {
-      processNextStep(simResult);
+      processNextStep(simResult, runId);
     }, 180);
   }, [
     isSimulating,
@@ -671,7 +702,6 @@ export default function App() {
     f2Blocks,
     currentLevel,
     resetLevelState,
-    handleLoadStarterCode,
     processNextStep,
   ]);
 
@@ -679,17 +709,25 @@ export default function App() {
   const handleStepOnce = useCallback(() => {
     sounds.playClick();
     if (!isSimulating) {
+      if (mainBlocks.length === 0) {
+        setSimulationErrorMessage('Susun minimal 1 balok perintah terlebih dahulu!');
+        return;
+      }
       resetLevelState();
       const simResult = runSimulation(currentLevel, mainBlocks, f1Blocks, f2Blocks);
+      const runId = ++simulationRunIdRef.current;
       simulationStepsRef.current = simResult.steps;
       currentStepIndexRef.current = 0;
       setIsSimulating(true);
       setMobileTab('ARENA');
 
-      setTimeout(() => {
+      simulationTimerRef.current = setTimeout(() => {
+        if (runId !== simulationRunIdRef.current) return;
         if (simResult.steps.length > 0) {
           executeStep(simResult.steps[0]);
           currentStepIndexRef.current = 1;
+        } else {
+          setIsSimulating(false);
         }
       }, 150);
       return;
@@ -720,35 +758,59 @@ export default function App() {
   // Save auto-run preference
   useEffect(() => {
     try {
-      localStorage.setItem('odibot_autorun', String(autoRunEnabled));
+      localStorage.setItem('odibot_autorun_v2', String(autoRunEnabled));
     } catch {}
+    if (!autoRunEnabled) {
+      setAutoRunCountdown(null);
+    }
   }, [autoRunEnabled]);
 
-  // Debounced Auto-Run Effect: Hanya aktif bila siswa secara manual menyalakan tombol Jalan Otomatis
   useEffect(() => {
-    if (!autoRunEnabled || isSimulating || isVictory || screen !== 'PLAYING') {
+    handleRunCodeRef.current = handleRunCode;
+  }, [handleRunCode]);
+
+  useEffect(() => {
+    isSimulatingRef.current = isSimulating;
+  }, [isSimulating]);
+
+  // Safe Debounced Auto-Run Effect: ONLY runs ONCE per code edit when student explicitly activates Jalan Otomatis.
+  // Never depends on isSimulating or handleRunCode, so finishing a failed run NEVER restarts in an infinite loop!
+  const codeSignature = JSON.stringify({
+    levelId: currentLevel.id,
+    mainBlocks,
+    f1Blocks,
+    f2Blocks,
+  });
+
+  useEffect(() => {
+    if (!autoRunEnabled || isVictory || screen !== 'PLAYING') {
       setAutoRunCountdown(null);
       return;
     }
     if (mainBlocks.length === 0) {
+      lastAutoRunSignatureRef.current = '';
       setAutoRunCountdown(null);
       return;
     }
+    if (codeSignature === lastAutoRunSignatureRef.current) {
+      return;
+    }
 
-    setAutoRunCountdown(3);
-    const countTimer = setTimeout(() => setAutoRunCountdown(2), 800);
-    const countTimer2 = setTimeout(() => setAutoRunCountdown(1), 1600);
+    setAutoRunCountdown(2);
+    const countTimer = setTimeout(() => setAutoRunCountdown(1), 800);
     const timer = setTimeout(() => {
       setAutoRunCountdown(null);
-      handleRunCode();
-    }, 2400);
+      lastAutoRunSignatureRef.current = codeSignature;
+      if (!isSimulatingRef.current) {
+        handleRunCodeRef.current();
+      }
+    }, 1600);
 
     return () => {
       clearTimeout(countTimer);
-      clearTimeout(countTimer2);
       clearTimeout(timer);
     };
-  }, [mainBlocks, f1Blocks, f2Blocks, autoRunEnabled, isSimulating, isVictory, screen, handleRunCode]);
+  }, [codeSignature, mainBlocks.length, autoRunEnabled, isVictory, screen]);
 
   // Costume / Skin change handler
   const handleSelectSkin = (skinId: RobotSkinId) => {
@@ -764,32 +826,39 @@ export default function App() {
     });
   };
 
-  // Google Profile & Cloud Sync Handlers
-  const handleSaveUserProfile = (profile: UserProgress['userProfile']) => {
-    setProgress((prev) => {
-      const updated: UserProgress = {
-        ...prev,
-        userProfile: profile,
-      };
-      try {
-        localStorage.setItem('kodibot_progress', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
-  };
-
-  const handleImportProgress = (imported: UserProgress) => {
-    setProgress(imported);
-    try {
-      localStorage.setItem('kodibot_progress', JSON.stringify(imported));
-    } catch {}
-    sounds.playVictory();
-  };
-
-  // Keyboard controls
+  // Keyboard controls (only active when no modal is blocking)
   useEffect(() => {
+    const anyModalOpen =
+      showLevelSelect ||
+      showHintModal ||
+      showSandbox ||
+      showConceptModal ||
+      showGoogleSyncModal ||
+      showSkinSelectorModal ||
+      isVictory;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.code === 'Escape') {
+        if (showGoogleSyncModal) setShowGoogleSyncModal(false);
+        else if (showSkinSelectorModal) setShowSkinSelectorModal(false);
+        else if (showConceptModal) setShowConceptModal(false);
+        else if (showLevelSelect) setShowLevelSelect(false);
+        else if (showHintModal) setShowHintModal(false);
+        else if (showSandbox) setShowSandbox(false);
+        return;
+      }
+
+      if (anyModalOpen) return;
 
       if (e.code === 'Space') {
         e.preventDefault();
@@ -826,13 +895,6 @@ export default function App() {
           handleManualAction('COLLECT');
         }
       }
-
-      if (e.code === 'Escape') {
-        if (showConceptModal) setShowConceptModal(false);
-        else if (showLevelSelect) setShowLevelSelect(false);
-        else if (showHintModal) setShowHintModal(false);
-        else if (showSandbox) setShowSandbox(false);
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -846,6 +908,9 @@ export default function App() {
     showHintModal,
     showSandbox,
     showConceptModal,
+    showGoogleSyncModal,
+    showSkinSelectorModal,
+    isVictory,
   ]);
 
   // Total crystals in level

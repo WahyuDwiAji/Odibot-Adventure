@@ -255,7 +255,9 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
       level.initialVariables,
       level.initialLists
     );
-    navigator.clipboard.writeText(code);
+    try {
+      navigator.clipboard?.writeText(code)?.catch(() => {});
+    } catch {}
     sounds.playClick();
     setCopiedPython(true);
     setTimeout(() => setCopiedPython(false), 2000);

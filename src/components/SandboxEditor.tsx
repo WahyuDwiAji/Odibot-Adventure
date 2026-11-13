@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Direction, LevelDefinition, TileData, TileType } from '../types/game';
+import { Direction, LevelDefinition, TileData } from '../types/game';
 import { sounds } from '../utils/audio';
 import { X, Play, RotateCcw, Sparkles } from 'lucide-react';
 

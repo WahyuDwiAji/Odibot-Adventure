@@ -4,7 +4,6 @@
 class SoundSystem {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
-  private ambientOsc: OscillatorNode | null = null;
   private ambientGain: GainNode | null = null;
 
   constructor() {
@@ -20,14 +19,20 @@ class SoundSystem {
   }
 
   private initCtx() {
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
+    try {
+      if (!this.ctx) {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          this.ctx = new AudioCtx();
+        }
       }
-    }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+    } catch {
+      this.ctx = null;
     }
   }
 

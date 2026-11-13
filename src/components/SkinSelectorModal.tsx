@@ -1,7 +1,7 @@
 import React from 'react';
 import { RobotSkinId } from '../types/game';
 import { sounds } from '../utils/audio';
-import { X, Sparkles, Check, Lock, Palette } from 'lucide-react';
+import { X, Check, Lock, Palette } from 'lucide-react';
 
 interface SkinSelectorModalProps {
   currentSkin: RobotSkinId;
