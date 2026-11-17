@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { ALL_LEVELS } from './data/levels';
 import {
   BlockCommand,
@@ -11,21 +11,37 @@ import {
   UserProgress,
 } from './types/game';
 import { runSimulation, SimulationResult } from './utils/simulation';
-import { countTotalBlocks, blocksToPython } from './utils/codeConverter';
+import { countTotalBlocks, blocksToPython, getLevelThresholds } from './utils/codeConverter';
+export { getLevelThresholds };
 import { sounds } from './utils/audio';
 
 import { IsometricCanvas } from './components/IsometricCanvas';
 import { BlockWorkspace } from './components/BlockWorkspace';
 import { TitleScreen } from './components/TitleScreen';
-import { VictoryModal } from './components/VictoryModal';
-import { LevelSelectModal } from './components/LevelSelectModal';
-import { HintModal } from './components/HintModal';
-import { SandboxEditor } from './components/SandboxEditor';
 import { ConceptBar } from './components/ConceptBar';
-import { ConceptModal } from './components/ConceptModal';
 import { CyberTerminalInspector } from './components/CyberTerminalInspector';
-import { GoogleCloudSyncModal } from './components/GoogleCloudSyncModal';
-import { SkinSelectorModal } from './components/SkinSelectorModal';
+
+const VictoryModal = lazy(() =>
+  import('./components/VictoryModal').then((m) => ({ default: m.VictoryModal }))
+);
+const LevelSelectModal = lazy(() =>
+  import('./components/LevelSelectModal').then((m) => ({ default: m.LevelSelectModal }))
+);
+const HintModal = lazy(() =>
+  import('./components/HintModal').then((m) => ({ default: m.HintModal }))
+);
+const SandboxEditor = lazy(() =>
+  import('./components/SandboxEditor').then((m) => ({ default: m.SandboxEditor }))
+);
+const ConceptModal = lazy(() =>
+  import('./components/ConceptModal').then((m) => ({ default: m.ConceptModal }))
+);
+const GoogleCloudSyncModal = lazy(() =>
+  import('./components/GoogleCloudSyncModal').then((m) => ({ default: m.GoogleCloudSyncModal }))
+);
+const SkinSelectorModal = lazy(() =>
+  import('./components/SkinSelectorModal').then((m) => ({ default: m.SkinSelectorModal }))
+);
 
 import {
   Play,
@@ -154,6 +170,7 @@ export default function App() {
 
   // Step simulation queue and runner ref
   const simulationStepsRef = useRef<ExecutionStep[]>([]);
+  const currentSimResultRef = useRef<SimulationResult | null>(null);
   const currentStepIndexRef = useRef<number>(0);
   const simulationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const simulationRunIdRef = useRef<number>(0);
@@ -375,15 +392,9 @@ export default function App() {
     }
   }, []);
 
-  // Process next step in simulation loop
-  const processNextStep = useCallback((simResult: SimulationResult, runId: number) => {
-    if (runId !== simulationRunIdRef.current) return;
-
-    const steps = simulationStepsRef.current;
-    const idx = currentStepIndexRef.current;
-
-    if (idx >= steps.length) {
-      // Simulation finished!
+  // Shared simulation completion handler (used by both auto-run/Run and Step-by-Step)
+  const finalizeSimulationResult = useCallback(
+    (simResult: SimulationResult) => {
       setIsSimulating(false);
       setActiveExecutingBlockId(undefined);
 
@@ -391,14 +402,20 @@ export default function App() {
         sounds.playVictory();
         setIsVictory(true);
 
-        // Calculate stars
         const usedBlocks = countTotalBlocks(mainBlocks, f1Blocks, f2Blocks);
+        const [threeStarLimit, twoStarLimit] = getLevelThresholds(currentLevel);
         let stars = 1;
-        if (simResult.totalCrystalsCollected >= simResult.totalCrystalsInLevel) stars++;
-        if (usedBlocks <= currentLevel.maxBlocksFor3Stars) stars++;
+        if (simResult.totalCrystalsCollected >= simResult.totalCrystalsInLevel) {
+          if (usedBlocks <= threeStarLimit) {
+            stars = 3;
+          } else if (usedBlocks <= twoStarLimit) {
+            stars = 2;
+          } else {
+            stars = 1;
+          }
+        }
         setStarsEarned(stars);
 
-        // Update progress
         setProgress((prev) => {
           const prevStars = prev.completedLevels[currentLevel.id]?.stars || 0;
           const bestBlocks = prev.completedLevels[currentLevel.id]?.bestBlockCount || 999;
@@ -423,6 +440,19 @@ export default function App() {
           simResult.failureReason || 'Misi belum berhasil. Periksa kembali logika kodingmu!'
         );
       }
+    },
+    [mainBlocks, f1Blocks, f2Blocks, currentLevel]
+  );
+
+  // Process next step in simulation loop
+  const processNextStep = useCallback((simResult: SimulationResult, runId: number) => {
+    if (runId !== simulationRunIdRef.current) return;
+
+    const steps = simulationStepsRef.current;
+    const idx = currentStepIndexRef.current;
+
+    if (idx >= steps.length) {
+      finalizeSimulationResult(simResult);
       return;
     }
 
@@ -446,7 +476,7 @@ export default function App() {
     simulationTimerRef.current = setTimeout(() => {
       processNextStepRef.current(simResult, runId);
     }, delay);
-  }, [mainBlocks, f1Blocks, f2Blocks, currentLevel, simulationSpeed, executeStep]);
+  }, [simulationSpeed, executeStep, finalizeSimulationResult]);
 
   // Keep processNextStepRef updated
   useEffect(() => {
@@ -540,7 +570,7 @@ export default function App() {
       const nx = robotState.x + vec.dx;
       const ny = robotState.y + vec.dy;
 
-      // Check bounds & empty space
+      // Check bounds & empty space FIRST before deducting energy
       if (
         nx < 0 ||
         nx >= currentLevel.gridWidth ||
@@ -556,19 +586,6 @@ export default function App() {
 
       const targetTile = tiles[ny][nx];
 
-      // Check battery if level has battery variable
-      if (currentVariables['baterai'] !== undefined) {
-        if (currentVariables['baterai'] <= 0) {
-          sounds.playBump();
-          setSimulationErrorMessage('Baterai Kodi habis (0)! Silakan atur ulang level (R).');
-          return;
-        }
-        setCurrentVariables((prev) => ({
-          ...prev,
-          baterai: Math.max(0, (prev.baterai || 0) - 1),
-        }));
-      }
-
       if (action === 'MOVE_FORWARD') {
         if (targetTile.height > robotState.height) {
           sounds.playBump();
@@ -580,19 +597,46 @@ export default function App() {
           setSimulationErrorMessage('Tebing curam! Gunakan tombol "Lompat" untuk turun aman.');
           return;
         }
+      } else {
+        if (targetTile.height > robotState.height + 1) {
+          sounds.playBump();
+          setSimulationErrorMessage('Dinding terlalu tinggi (+2 tingkat)! Lompatan hanya menjangkau selisih 1 tingkat.');
+          return;
+        }
+      }
+
+      // Check hazard BEFORE deducting battery
+      if (targetTile.type === 'HAZARD' && targetTile.isHazardActive) {
+        sounds.playBump();
+        setSimulationErrorMessage('Awas! Laser merah menyengat Kodi! Aktifkan saklar terlebih dahulu.');
+        return;
+      }
+
+      // Check battery on MOVE_FORWARD (consistent with simulation engine)
+      if (action === 'MOVE_FORWARD' && currentVariables['baterai'] !== undefined) {
+        if (currentVariables['baterai'] <= 0) {
+          sounds.playBump();
+          setSimulationErrorMessage('Baterai Kodi habis (0)! Silakan atur ulang level (R).');
+          return;
+        }
+        setCurrentVariables((prev) => ({
+          ...prev,
+          baterai: Math.max(0, (prev.baterai || 0) - 1),
+          ...(prev.langkah !== undefined ? { langkah: (prev.langkah || 0) + 1 } : {}),
+        }));
+      } else if (currentVariables['langkah'] !== undefined) {
+        setCurrentVariables((prev) => ({
+          ...prev,
+          langkah: (prev.langkah || 0) + 1,
+        }));
+      }
+
+      if (action === 'MOVE_FORWARD') {
         sounds.playStep();
         setActiveAction('MOVE_FORWARD');
       } else {
-        // JUMP
         sounds.playJump();
         setActiveAction('JUMP');
-      }
-
-      // Check hazard
-      if (targetTile.type === 'HAZARD' && targetTile.isHazardActive) {
-        sounds.playBump();
-        setSimulationErrorMessage('Awas! Laser merah menyengat Kodi!');
-        return;
       }
 
       // Move robot state
@@ -603,25 +647,82 @@ export default function App() {
         dir: robotState.dir,
       });
 
-      // Check switch
+      // Auto-toggle switch if stepping onto a SWITCH tile manually
       let updatedTiles = tiles;
       if (targetTile.type === 'SWITCH') {
         sounds.playSwitch();
         updatedTiles = tiles.map((row) => row.map((t) => ({ ...t })));
-        const newSwitchState = !updatedTiles[ny][nx].isSwitchActive;
-        updatedTiles[ny][nx].isSwitchActive = newSwitchState;
-        updatedTiles.forEach((row) => {
-          row.forEach((t) => {
-            if (t.type === 'HAZARD') {
-              t.isHazardActive = !newSwitchState;
+        const sw = updatedTiles[ny][nx];
+        const newSwitchState = !sw.isSwitchActive;
+        sw.isSwitchActive = newSwitchState;
+
+        if (sw.switchTargetCoords && sw.switchTargetCoords.length > 0) {
+          sw.switchTargetCoords.forEach((coord) => {
+            const ht = updatedTiles[coord.y]?.[coord.x];
+            if (ht && ht.type === 'HAZARD') {
+              ht.isHazardActive = !ht.isHazardActive;
             }
           });
-        });
+        } else {
+          updatedTiles.forEach((row) => {
+            row.forEach((t) => {
+              if (t.type === 'HAZARD') {
+                t.isHazardActive = !newSwitchState;
+              }
+            });
+          });
+        }
         setTiles(updatedTiles);
+        setCurrentVariables((prev) => ({
+          ...prev,
+          ...(prev.saklar_aktif !== undefined ? { saklar_aktif: newSwitchState ? 1 : 0 } : {}),
+          ...(prev.saklar1 !== undefined && nx <= 2 ? { saklar1: newSwitchState ? 1 : 0 } : {}),
+          ...(prev.saklar2 !== undefined && nx > 2 ? { saklar2: newSwitchState ? 1 : 0 } : {}),
+        }));
       }
 
       // Check victory
       checkManualVictory(nx, ny, updatedTiles);
+      return;
+    }
+
+    if (action === 'TOGGLE_SWITCH') {
+      const curTile = tiles[robotState.y]?.[robotState.x];
+      if (curTile && curTile.type === 'SWITCH') {
+        sounds.playSwitch();
+        setActiveAction('TOGGLE_SWITCH');
+        const updatedTiles = tiles.map((row) => row.map((t) => ({ ...t })));
+        const sw = updatedTiles[robotState.y][robotState.x];
+        const newSwitchState = !sw.isSwitchActive;
+        sw.isSwitchActive = newSwitchState;
+
+        if (sw.switchTargetCoords && sw.switchTargetCoords.length > 0) {
+          sw.switchTargetCoords.forEach((coord) => {
+            const ht = updatedTiles[coord.y]?.[coord.x];
+            if (ht && ht.type === 'HAZARD') {
+              ht.isHazardActive = !ht.isHazardActive;
+            }
+          });
+        } else {
+          updatedTiles.forEach((row) => {
+            row.forEach((t) => {
+              if (t.type === 'HAZARD') {
+                t.isHazardActive = !newSwitchState;
+              }
+            });
+          });
+        }
+        setTiles(updatedTiles);
+        setCurrentVariables((prev) => ({
+          ...prev,
+          ...(prev.saklar_aktif !== undefined ? { saklar_aktif: newSwitchState ? 1 : 0 } : {}),
+          ...(prev.saklar1 !== undefined && robotState.x <= 2 ? { saklar1: newSwitchState ? 1 : 0 } : {}),
+          ...(prev.saklar2 !== undefined && robotState.x > 2 ? { saklar2: newSwitchState ? 1 : 0 } : {}),
+        }));
+      } else {
+        sounds.playBump();
+        setSimulationErrorMessage('Tidak ada saklar laser di ubin ini!');
+      }
       return;
     }
 
@@ -686,6 +787,7 @@ export default function App() {
     // Run simulation algorithm
     const simResult = runSimulation(currentLevel, mainBlocks, f1Blocks, f2Blocks);
     const runId = ++simulationRunIdRef.current;
+    currentSimResultRef.current = simResult;
     simulationStepsRef.current = simResult.steps;
     currentStepIndexRef.current = 0;
     setIsSimulating(true);
@@ -716,6 +818,7 @@ export default function App() {
       resetLevelState();
       const simResult = runSimulation(currentLevel, mainBlocks, f1Blocks, f2Blocks);
       const runId = ++simulationRunIdRef.current;
+      currentSimResultRef.current = simResult;
       simulationStepsRef.current = simResult.steps;
       currentStepIndexRef.current = 0;
       setIsSimulating(true);
@@ -724,10 +827,21 @@ export default function App() {
       simulationTimerRef.current = setTimeout(() => {
         if (runId !== simulationRunIdRef.current) return;
         if (simResult.steps.length > 0) {
-          executeStep(simResult.steps[0]);
+          const step0 = simResult.steps[0];
+          executeStep(step0);
           currentStepIndexRef.current = 1;
+          if (
+            step0.status === 'FALLEN' ||
+            step0.status === 'BLOCKED' ||
+            step0.status === 'ZAPPED' ||
+            step0.status === 'OUT_OF_ENERGY'
+          ) {
+            setIsSimulating(false);
+          } else if (simResult.steps.length === 1) {
+            finalizeSimulationResult(simResult);
+          }
         } else {
-          setIsSimulating(false);
+          finalizeSimulationResult(simResult);
         }
       }, 150);
       return;
@@ -735,15 +849,38 @@ export default function App() {
 
     const steps = simulationStepsRef.current;
     const idx = currentStepIndexRef.current;
+    const simResult = currentSimResultRef.current;
 
     if (idx < steps.length) {
-      executeStep(steps[idx]);
+      const step = steps[idx];
+      executeStep(step);
       currentStepIndexRef.current = idx + 1;
+      if (
+        step.status === 'FALLEN' ||
+        step.status === 'BLOCKED' ||
+        step.status === 'ZAPPED' ||
+        step.status === 'OUT_OF_ENERGY'
+      ) {
+        setIsSimulating(false);
+      } else if (idx + 1 >= steps.length && simResult) {
+        finalizeSimulationResult(simResult);
+      }
+    } else if (simResult) {
+      finalizeSimulationResult(simResult);
     } else {
       setIsSimulating(false);
       setActiveExecutingBlockId(undefined);
     }
-  }, [isSimulating, mainBlocks, f1Blocks, f2Blocks, currentLevel, resetLevelState, executeStep]);
+  }, [
+    isSimulating,
+    mainBlocks,
+    f1Blocks,
+    f2Blocks,
+    currentLevel,
+    resetLevelState,
+    executeStep,
+    finalizeSimulationResult,
+  ]);
 
   // Next level navigation
   const handleNextLevel = () => {
@@ -775,12 +912,17 @@ export default function App() {
 
   // Safe Debounced Auto-Run Effect: ONLY runs ONCE per code edit when student explicitly activates Jalan Otomatis.
   // Never depends on isSimulating or handleRunCode, so finishing a failed run NEVER restarts in an infinite loop!
-  const codeSignature = JSON.stringify({
-    levelId: currentLevel.id,
-    mainBlocks,
-    f1Blocks,
-    f2Blocks,
-  });
+  const codeSignature = useMemo(() => {
+    if (!autoRunEnabled || isVictory || screen !== 'PLAYING' || mainBlocks.length === 0) {
+      return '';
+    }
+    return JSON.stringify({
+      levelId: currentLevel.id,
+      mainBlocks,
+      f1Blocks,
+      f2Blocks,
+    });
+  }, [autoRunEnabled, isVictory, screen, currentLevel.id, mainBlocks, f1Blocks, f2Blocks]);
 
   useEffect(() => {
     if (!autoRunEnabled || isVictory || screen !== 'PLAYING') {
@@ -861,6 +1003,7 @@ export default function App() {
       if (anyModalOpen) return;
 
       if (e.code === 'Space') {
+        if (e.repeat) return;
         e.preventDefault();
         if (screen === 'TITLE') {
           setScreen('PLAYING');
@@ -871,6 +1014,7 @@ export default function App() {
         e.preventDefault();
         setScreen('PLAYING');
       } else if (e.code === 'KeyR' && screen === 'PLAYING') {
+        if (e.repeat) return;
         e.preventDefault();
         resetLevelState();
       } else if (screen === 'PLAYING') {
@@ -893,6 +1037,9 @@ export default function App() {
         } else if (e.code === 'KeyE') {
           e.preventDefault();
           handleManualAction('COLLECT');
+        } else if (e.code === 'KeyF') {
+          e.preventDefault();
+          handleManualAction('TOGGLE_SWITCH');
         }
       }
     };
@@ -913,22 +1060,45 @@ export default function App() {
     isVictory,
   ]);
 
-  // Total crystals in level
-  let totalCrystalsInLevel = 0;
-  currentLevel.tiles.forEach((row) =>
-    row.forEach((t) => {
-      if (t.hasCrystal) totalCrystalsInLevel++;
-    })
+  // Total crystals in level (memoized per level)
+  const totalCrystalsInLevel = useMemo(() => {
+    let count = 0;
+    currentLevel.tiles.forEach((row) =>
+      row.forEach((t) => {
+        if (t.hasCrystal) count++;
+      })
+    );
+    return count;
+  }, [currentLevel]);
+
+  const totalBlocksUsed = useMemo(
+    () => countTotalBlocks(mainBlocks, f1Blocks, f2Blocks),
+    [mainBlocks, f1Blocks, f2Blocks]
   );
 
+  const handleStartCodingMission = useCallback(() => {
+    const firstLevel = ALL_LEVELS[0];
+    const alreadyCleanOnFirst =
+      currentLevel.id === firstLevel.id &&
+      tiles.length > 0 &&
+      executionHistory.length === 0 &&
+      crystalsCollected === 0 &&
+      !isVictory &&
+      robotState.x === firstLevel.startPos.x &&
+      robotState.y === firstLevel.startPos.y &&
+      robotState.dir === firstLevel.startDir;
+
+    setScreen('PLAYING');
+    if (!alreadyCleanOnFirst) {
+      loadLevel(firstLevel);
+    }
+  }, [currentLevel.id, tiles.length, executionHistory.length, crystalsCollected, isVictory, robotState, loadLevel]);
+
   return (
-    <div className="w-full h-screen bg-slate-950 text-slate-100 flex flex-col overflow-hidden font-sans">
+    <div className="w-full h-[100dvh] bg-slate-950 text-slate-100 flex flex-col overflow-hidden font-sans">
       {screen === 'TITLE' ? (
         <TitleScreen
-          onStartGame={() => {
-            setScreen('PLAYING');
-            loadLevel(ALL_LEVELS[0]);
-          }}
+          onStartGame={handleStartCodingMission}
           onOpenLevelSelect={() => {
             setScreen('PLAYING');
             setShowLevelSelect(true);
@@ -956,34 +1126,34 @@ export default function App() {
         />
       ) : (
         /* PLAYING VIEWPORT */
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
           {/* Header Zone: Breadcrumbs, Level Title, Global Controls */}
-          <header className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 shrink-0 gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
+          <header className="flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-900 border-b border-slate-800 shrink-0 gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
               <button
                 onClick={() => {
                   sounds.playClick();
                   setScreen('TITLE');
                 }}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors shrink-0"
                 title="Kembali ke Layar Judul"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
 
               <div className="min-w-0">
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-1.5 text-[11px] sm:text-xs min-w-0">
                   <span className="font-semibold text-cyan-400 truncate">{currentLevel.zoneName}</span>
-                  <span className="text-slate-600">/</span>
-                  <span className="text-slate-400 font-mono">Level {currentLevel.levelNumber}</span>
+                  <span className="text-slate-600 shrink-0">/</span>
+                  <span className="text-slate-400 font-mono shrink-0">Lv {currentLevel.levelNumber}</span>
                   {currentLevel.isDebuggingChallenge && (
-                    <span className="px-1.5 py-0.2 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded text-[10px] font-semibold flex items-center gap-1">
+                    <span className="px-1.5 py-0.2 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded text-[10px] font-semibold hidden sm:flex items-center gap-1 shrink-0">
                       <Bug className="w-3 h-3" />
                       Cari Bug
                     </span>
                   )}
                 </div>
-                <h1 className="text-sm sm:text-base font-bold text-white truncate font-display">
+                <h1 className="text-xs sm:text-base font-bold text-white truncate font-display">
                   {currentLevel.title}
                 </h1>
               </div>
@@ -997,10 +1167,10 @@ export default function App() {
                   sounds.playClick();
                   setShowLevelSelect(true);
                 }}
-                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 rounded-xl text-xs font-bold transition-colors min-h-[36px]"
+                className="flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 py-1.5 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 rounded-xl text-xs font-bold transition-colors min-h-[40px] min-w-[40px]"
                 title="Peta 60 Misi Tantangan"
               >
-                <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                <Compass className="w-4 h-4 text-cyan-400" />
                 <span className="hidden sm:inline">60 Misi</span>
               </button>
 
@@ -1010,10 +1180,10 @@ export default function App() {
                   sounds.playClick();
                   setShowHintModal(true);
                 }}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-medium text-amber-300 transition-colors min-h-[36px]"
+                className="flex items-center justify-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-medium text-amber-300 transition-colors min-h-[40px] min-w-[40px]"
                 title="Buka Petunjuk Misi"
               >
-                <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+                <Lightbulb className="w-4 h-4 text-amber-400" />
                 <span className="hidden md:inline">Petunjuk</span>
               </button>
 
@@ -1081,7 +1251,7 @@ export default function App() {
               <div className="relative lg:hidden">
                 <button
                   onClick={() => setShowMobileMoreMenu(!showMobileMoreMenu)}
-                  className={`flex items-center gap-1 p-2 rounded-xl border text-xs font-semibold transition-colors min-h-[36px] min-w-[36px] justify-center ${
+                  className={`flex items-center gap-1 p-2 rounded-xl border text-xs font-semibold transition-colors min-h-[40px] min-w-[40px] justify-center ${
                     showMobileMoreMenu
                       ? 'bg-slate-700 text-white border-slate-600'
                       : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
@@ -1092,14 +1262,14 @@ export default function App() {
                 </button>
 
                 {showMobileMoreMenu && (
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95">
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1">
                     <button
                       onClick={() => {
                         sounds.playClick();
                         setShowMobileMoreMenu(false);
                         setShowGoogleSyncModal(true);
                       }}
-                      className="w-full flex items-center gap-2 p-2 rounded-xl text-xs font-semibold hover:bg-slate-800 text-slate-200 transition-colors text-left"
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 min-h-[42px] rounded-xl text-xs font-semibold hover:bg-slate-800 text-slate-200 transition-colors text-left"
                     >
                       <Cloud className={`w-4 h-4 ${progress.userProfile ? 'text-emerald-400' : 'text-slate-400'}`} />
                       <span>{progress.userProfile ? 'Google Cloud (Tersambung)' : 'Masuk Google Cloud'}</span>
@@ -1111,7 +1281,7 @@ export default function App() {
                         setShowMobileMoreMenu(false);
                         setShowSkinSelectorModal(true);
                       }}
-                      className="w-full flex items-center gap-2 p-2 rounded-xl text-xs font-semibold hover:bg-slate-800 text-pink-300 transition-colors text-left"
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 min-h-[42px] rounded-xl text-xs font-semibold hover:bg-slate-800 text-pink-300 transition-colors text-left"
                     >
                       <Palette className="w-4 h-4 text-pink-400" />
                       <span>Bengkel Kostum Robot</span>
@@ -1123,7 +1293,7 @@ export default function App() {
                         setShowMobileMoreMenu(false);
                         setShowConceptModal(true);
                       }}
-                      className="w-full flex items-center gap-2 p-2 rounded-xl text-xs font-semibold hover:bg-slate-800 text-amber-300 transition-colors text-left"
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 min-h-[42px] rounded-xl text-xs font-semibold hover:bg-slate-800 text-amber-300 transition-colors text-left"
                     >
                       <BookOpen className="w-4 h-4 text-amber-400" />
                       <span>Pusat Teori Konsep SD</span>
@@ -1135,7 +1305,7 @@ export default function App() {
                         setShowMobileMoreMenu(false);
                         setShowSandbox(true);
                       }}
-                      className="w-full flex items-center gap-2 p-2 rounded-xl text-xs font-semibold hover:bg-slate-800 text-purple-300 transition-colors text-left"
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 min-h-[42px] rounded-xl text-xs font-semibold hover:bg-slate-800 text-purple-300 transition-colors text-left"
                     >
                       <Sparkles className="w-4 h-4 text-purple-400" />
                       <span>Studio Kreatif Sandbox</span>
@@ -1147,10 +1317,10 @@ export default function App() {
               {/* Mute Button */}
               <button
                 onClick={() => setIsMuted(sounds.toggleMute())}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
                 title={isMuted ? 'Nyalakan Suara' : 'Matikan Suara'}
               >
-                {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
+                {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
               </button>
             </div>
           </header>
@@ -1160,7 +1330,7 @@ export default function App() {
             level={currentLevel}
             crystalsCollected={crystalsCollected}
             totalCrystalsInLevel={totalCrystalsInLevel}
-            totalBlocksUsed={countTotalBlocks(mainBlocks, f1Blocks, f2Blocks)}
+            totalBlocksUsed={totalBlocksUsed}
             onOpenConceptModal={(topic) => {
               setActiveConceptTopic(topic);
               setShowConceptModal(true);
@@ -1171,24 +1341,24 @@ export default function App() {
 
           {/* Error Banner when robot encounters obstacle or fails */}
           {simulationErrorMessage && (
-            <div className="flex items-center justify-between px-4 py-2 bg-rose-950/90 border-b border-rose-800/80 text-rose-200 text-xs shrink-0 animate-in slide-in-from-top-1">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 sm:px-4 py-2 bg-rose-950/90 border-b border-rose-800/80 text-rose-200 text-xs shrink-0 animate-in slide-in-from-top-1">
+              <div className="flex items-center gap-2 min-w-0">
                 <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>{simulationErrorMessage}</span>
+                <span className="leading-snug">{simulationErrorMessage}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                 {currentLevel.starterBlocks && (
                   <button
                     onClick={handleLoadStarterCode}
-                    className="px-2 py-0.5 bg-rose-900/60 hover:bg-rose-850 text-white rounded font-medium text-xs transition-colors flex items-center gap-1"
+                    className="px-2.5 py-1.5 min-h-[34px] bg-rose-900/60 hover:bg-rose-800 text-white rounded-lg font-medium text-xs transition-colors flex items-center gap-1"
                   >
-                    <HelpCircle className="w-3 h-3" />
+                    <HelpCircle className="w-3.5 h-3.5" />
                     <span>Pakai Contoh</span>
                   </button>
                 )}
                 <button
                   onClick={resetLevelState}
-                  className="px-2.5 py-0.5 bg-rose-800 hover:bg-rose-700 text-white rounded font-medium text-xs transition-colors"
+                  className="px-3 py-1.5 min-h-[34px] bg-rose-800 hover:bg-rose-700 text-white rounded-lg font-medium text-xs transition-colors"
                 >
                   Atur Ulang
                 </button>
@@ -1197,60 +1367,59 @@ export default function App() {
           )}
 
           {/* Mobile View Switcher (Robot vs Kode) - Visible only on mobile (< md) */}
-          <div className="md:hidden flex items-center bg-slate-950 p-1.5 border-b border-slate-800 gap-1.5 shrink-0">
+          <div className="md:hidden flex items-center bg-slate-950 px-2 py-1.5 border-b border-slate-800 gap-1.5 shrink-0">
             <button
               onClick={() => {
                 sounds.playClick();
                 setMobileTab('ARENA');
               }}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 min-h-[42px] ${
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 min-h-[44px] ${
                 mobileTab === 'ARENA'
                   ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md ring-1 ring-cyan-400/40'
                   : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
               }`}
             >
               <Bot className="w-4 h-4" />
-              <span>🤖 Arena Robot</span>
+              <span>Arena Robot</span>
             </button>
             <button
               onClick={() => {
                 sounds.playClick();
                 setMobileTab('CODE');
               }}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 min-h-[42px] ${
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 min-h-[44px] ${
                 mobileTab === 'CODE'
                   ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md ring-1 ring-emerald-400/40'
                   : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
               }`}
             >
               <Code2 className="w-4 h-4" />
-              <span>💻 Susun Kode ({countTotalBlocks(mainBlocks, f1Blocks, f2Blocks)})</span>
+              <span>Susun Kode ({totalBlocksUsed})</span>
             </button>
           </div>
 
           {/* Main Playfield Grid: Side-by-side on tablet/desktop, Tabbed on mobile */}
-          <div className="flex-1 flex flex-col md:grid md:grid-cols-12 gap-2 sm:gap-3 p-2 sm:p-3 min-h-0 overflow-hidden">
+          <div className="flex-1 flex flex-col md:grid md:grid-cols-12 gap-1.5 sm:gap-3 p-1.5 sm:p-3 min-h-0 overflow-hidden">
             {/* Left Playfield: 5 Cols on tablet/desktop, visible on mobile when mobileTab === 'ARENA' */}
             <div className={`${mobileTab === 'ARENA' ? 'flex' : 'hidden md:flex'} md:col-span-5 flex flex-col h-full min-h-0 overflow-hidden relative`}>
-              {/* Computer Memory HUD (Variables & Lists State) */}
-              <div className="flex items-center justify-between mb-2 px-1 text-xs text-slate-300 shrink-0 flex-wrap gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
+              {/* Computer Memory HUD (Variables & Lists State) - Single line scrollable on mobile */}
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2 px-0.5 text-xs text-slate-300 shrink-0 gap-2 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   {/* Crystals */}
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg whitespace-nowrap shrink-0">
                     <span className="text-amber-400 font-bold">💎 Kristal:</span>
-                    <span className="font-mono font-bold text-white">
-                      {crystalsCollected} / {totalCrystalsInLevel}
+                    <span className="font-mono font-bold text-white tabular-nums">
+                      {crystalsCollected}/{totalCrystalsInLevel}
                     </span>
                   </div>
 
                   {/* Variables HUD */}
                   {Object.keys(currentVariables).length > 0 && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-teal-800/80 rounded-lg text-teal-300">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-teal-800/80 rounded-lg text-teal-300 whitespace-nowrap shrink-0">
                       <Variable className="w-3.5 h-3.5 text-teal-400" />
-                      <span className="text-slate-400">Variabel:</span>
                       {Object.entries(currentVariables).map(([k, v]) => (
                         <span key={k} className="font-mono font-bold text-white">
-                          {k} = {v}
+                          {k}={v}
                           {k === 'baterai' && (
                             <Battery className="w-3.5 h-3.5 inline ml-1 text-cyan-400" />
                           )}
@@ -1261,12 +1430,11 @@ export default function App() {
 
                   {/* Data Structures (Lists) HUD */}
                   {Object.keys(currentLists).length > 0 && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-blue-800/80 rounded-lg text-blue-300 max-w-[280px] truncate">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-blue-800/80 rounded-lg text-blue-300 max-w-[220px] sm:max-w-[280px] whitespace-nowrap shrink-0">
                       <ListOrdered className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                      <span className="text-slate-400 shrink-0">List:</span>
                       {Object.entries(currentLists).map(([k, l]) => (
                         <span key={k} className="font-mono font-bold text-white truncate text-[11px]">
-                          {k} = [{l.slice(0, 3).join(', ')}{l.length > 3 ? '...' : ''}]
+                          {k}=[{l.slice(0, 3).join(', ')}{l.length > 3 ? '...' : ''}]
                         </span>
                       ))}
                     </div>
@@ -1274,8 +1442,8 @@ export default function App() {
                 </div>
 
                 {/* Speed Selector */}
-                <div className="flex items-center gap-1 p-0.5 bg-slate-900 border border-slate-800 rounded-lg">
-                  <span className="text-[11px] text-slate-500 px-1.5 flex items-center gap-1">
+                <div className="flex items-center gap-1 p-0.5 bg-slate-900 border border-slate-800 rounded-lg shrink-0">
+                  <span className="text-[11px] text-slate-500 px-1 flex items-center gap-1">
                     <Gauge className="w-3 h-3" />
                   </span>
                   {([1, 2, 4] as const).map((spd) => (
@@ -1285,7 +1453,7 @@ export default function App() {
                         sounds.playClick();
                         setSimulationSpeed(spd);
                       }}
-                      className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-colors ${
+                      className={`px-2 py-1 min-h-[28px] rounded text-[11px] font-mono font-bold transition-colors ${
                         simulationSpeed === spd
                           ? 'bg-cyan-600 text-white shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
@@ -1298,13 +1466,14 @@ export default function App() {
               </div>
 
               {/* Isolated Isometric Canvas Viewport */}
-              <div className="flex-1 relative min-h-[300px]">
+              <div className="flex-1 relative min-h-[200px] sm:min-h-[300px]">
                 <IsometricCanvas
                   level={currentLevel}
                   tiles={tiles}
                   robotState={robotState}
                   isSimulating={isSimulating}
                   activeAction={activeAction}
+                  isVictory={isVictory}
                   celebratingVictory={isVictory}
                   onManualAction={handleManualAction}
                   skinId={progress.customSkin || 'CYAN'}
@@ -1313,8 +1482,8 @@ export default function App() {
                 />
               </div>
 
-              {/* Bottom Playback Bar */}
-              <div className="flex items-center justify-between mt-2 pt-1 gap-2 shrink-0">
+              {/* Desktop Bottom Playback Bar (hidden on mobile < md) */}
+              <div className="hidden md:flex items-center justify-between mt-2 pt-1 gap-2 shrink-0">
                 <button
                   onClick={resetLevelState}
                   className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-medium transition-colors"
@@ -1350,7 +1519,7 @@ export default function App() {
               </div>
 
               {/* Cyber Terminal Inspector: Memori RAM, Tabel Trace & Konsol */}
-              <div className="mt-2 shrink-0">
+              <div className="mt-1.5 sm:mt-2 shrink-0">
                 <CyberTerminalInspector
                   level={currentLevel}
                   robotState={robotState}
@@ -1362,31 +1531,6 @@ export default function App() {
                   isSimulating={isSimulating}
                   historySteps={executionHistory}
                 />
-              </div>
-
-              {/* Mobile quick action bar when viewing arena (< md) */}
-              <div className="md:hidden mt-2 flex items-center justify-between gap-2 p-1.5 bg-slate-900/95 border border-slate-800 rounded-2xl shrink-0">
-                <button
-                  onClick={handleRunCode}
-                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black tracking-wider flex items-center justify-center gap-1.5 shadow min-h-[42px] ${
-                    isSimulating
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 shadow-emerald-500/20'
-                  }`}
-                >
-                  <Play className={`w-3.5 h-3.5 fill-current ${isSimulating ? 'animate-spin' : ''}`} />
-                  <span>{isSimulating ? 'HENTIKAN' : '▶ JALANKAN KODE'}</span>
-                </button>
-                <button
-                  onClick={() => {
-                    sounds.playClick();
-                    setMobileTab('CODE');
-                  }}
-                  className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 min-h-[42px]"
-                >
-                  <Code2 className="w-3.5 h-3.5" />
-                  <span>Ubah Kode ({countTotalBlocks(mainBlocks, f1Blocks, f2Blocks)})</span>
-                </button>
               </div>
             </div>
 
@@ -1411,93 +1555,137 @@ export default function App() {
               />
             </div>
           </div>
+
+          {/* Unified Mobile Thumb-Zone Bottom Dock (< md) — visible in BOTH Arena & Code tabs */}
+          <div className="md:hidden px-2.5 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-slate-900/95 border-t border-slate-800 flex items-center gap-2 shrink-0">
+            <button
+              onClick={resetLevelState}
+              className="min-h-[44px] min-w-[44px] px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shrink-0"
+              title="Reset Posisi Robot"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span className="hidden min-[380px]:inline">Reset</span>
+            </button>
+
+            <button
+              onClick={handleStepOnce}
+              disabled={isVictory}
+              className="min-h-[44px] px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 shrink-0"
+              title="Jalankan 1 Langkah"
+            >
+              <StepForward className="w-4 h-4" />
+              <span>1 Langkah</span>
+            </button>
+
+            <button
+              onClick={handleRunCode}
+              className={`flex-1 min-h-[44px] px-4 rounded-xl text-xs font-black tracking-wide font-display flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all ${
+                isSimulating
+                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/25'
+                  : 'bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-950 shadow-cyan-500/25'
+              }`}
+            >
+              <Play className={`w-4 h-4 fill-current ${isSimulating ? 'animate-pulse' : ''}`} />
+              <span>{isSimulating ? 'HENTIKAN' : 'JALANKAN'}</span>
+            </button>
+          </div>
+
+          {/* Subtle Developer Attribution Bar (Desktop & Tablet) */}
+          <footer className="hidden md:flex px-4 py-1 bg-slate-950/90 border-t border-slate-900 items-center justify-between text-[11px] text-slate-500 shrink-0">
+            <span className="truncate">Odibot Adventure · Koding dan Kecerdasan Artifisial (KA) SD Fase C</span>
+            <span className="text-slate-400 font-medium truncate">
+              Pengembang: <span className="text-cyan-400 font-semibold">Wahyu Dwi Aji, S.Pd., M.Pd.</span>
+            </span>
+          </footer>
         </div>
       )}
 
-      {/* Victory Celebration Modal */}
-      {isVictory && (
-        <VictoryModal
-          level={currentLevel}
-          starsEarned={starsEarned}
-          totalBlocksUsed={countTotalBlocks(mainBlocks, f1Blocks, f2Blocks)}
-          crystalsCollected={crystalsCollected}
-          totalCrystals={totalCrystalsInLevel}
-          pythonCode={blocksToPython(
-            mainBlocks,
-            f1Blocks,
-            f2Blocks,
-            currentLevel.initialVariables,
-            currentLevel.initialLists
-          )}
-          onNextLevel={handleNextLevel}
-          onReplay={resetLevelState}
-          onOpenLevelSelect={() => {
-            setIsVictory(false);
-            setShowLevelSelect(true);
-          }}
-        />
-      )}
+      <Suspense fallback={null}>
+        {/* Victory Celebration Modal */}
+        {isVictory && (
+          <VictoryModal
+            level={currentLevel}
+            starsEarned={starsEarned}
+            totalBlocksUsed={totalBlocksUsed}
+            crystalsCollected={crystalsCollected}
+            totalCrystals={totalCrystalsInLevel}
+            pythonCode={blocksToPython(
+              mainBlocks,
+              f1Blocks,
+              f2Blocks,
+              currentLevel.initialVariables,
+              currentLevel.initialLists
+            )}
+            onNextLevel={handleNextLevel}
+            onReplay={resetLevelState}
+            onOpenLevelSelect={() => {
+              setIsVictory(false);
+              setShowLevelSelect(true);
+            }}
+          />
+        )}
 
-      {/* Level Selection Modal */}
-      {showLevelSelect && (
-        <LevelSelectModal
-          currentLevelId={currentLevel.id}
-          progress={progress}
-          onSelectLevel={(lvl) => loadLevel(lvl)}
-          onClose={() => setShowLevelSelect(false)}
-        />
-      )}
+        {/* Level Selection Modal */}
+        {showLevelSelect && (
+          <LevelSelectModal
+            currentLevelId={currentLevel.id}
+            progress={progress}
+            onSelectLevel={(lvl) => loadLevel(lvl)}
+            onClose={() => setShowLevelSelect(false)}
+          />
+        )}
 
-      {/* Hint Modal */}
-      {showHintModal && (
-        <HintModal
-          level={currentLevel}
-          onClose={() => setShowHintModal(false)}
-        />
-      )}
+        {/* Hint Modal */}
+        {showHintModal && (
+          <HintModal
+            level={currentLevel}
+            onClose={() => setShowHintModal(false)}
+          />
+        )}
 
-      {/* Sandbox Editor Modal */}
-      {showSandbox && (
-        <SandboxEditor
-          onPlayCustomLevel={(lvl) => {
-            setShowSandbox(false);
-            loadLevel(lvl);
-          }}
-          onClose={() => setShowSandbox(false)}
-        />
-      )}
+        {/* Sandbox Editor Modal */}
+        {showSandbox && (
+          <SandboxEditor
+            onPlayCustomLevel={(lvl) => {
+              setShowSandbox(false);
+              loadLevel(lvl);
+            }}
+            onClose={() => setShowSandbox(false)}
+          />
+        )}
 
-      {/* Concept Guide Modal (Kurikulum Merdeka SD) */}
-      {showConceptModal && (
-        <ConceptModal
-          activeConceptZoneId={activeConceptTopic}
-          onClose={() => setShowConceptModal(false)}
-        />
-      )}
+        {/* Concept Guide Modal (Kurikulum Merdeka SD) */}
+        {showConceptModal && (
+          <ConceptModal
+            activeConceptZoneId={activeConceptTopic}
+            onClose={() => setShowConceptModal(false)}
+          />
+        )}
 
-      {/* Google Sign-In & Cloud Sync Modal */}
-      {showGoogleSyncModal && (
-        <GoogleCloudSyncModal
-          progress={progress}
-          onUpdateProgress={(newProgress) => {
-            setProgress(newProgress);
-            try {
-              localStorage.setItem('kodibot_progress', JSON.stringify(newProgress));
-            } catch {}
-          }}
-          onClose={() => setShowGoogleSyncModal(false)}
-        />
-      )}
+        {/* Google Sign-In & Cloud Sync Modal */}
+        {showGoogleSyncModal && (
+          <GoogleCloudSyncModal
+            progress={progress}
+            onUpdateProgress={(newProgress) => {
+              setProgress(newProgress);
+              try {
+                localStorage.setItem('kodibot_progress', JSON.stringify(newProgress));
+              } catch {}
+            }}
+            onClose={() => setShowGoogleSyncModal(false)}
+          />
+        )}
 
-      {/* Robot Skin / Costume Selector Modal */}
-      {showSkinSelectorModal && (
-        <SkinSelectorModal
-          currentSkin={progress.customSkin || 'CYAN'}
-          totalStars={totalStars}
-          onSelectSkin={handleSelectSkin}
-          onClose={() => setShowSkinSelectorModal(false)}
-        />
-      )}
+        {/* Robot Skin / Costume Selector Modal */}
+        {showSkinSelectorModal && (
+          <SkinSelectorModal
+            currentSkin={progress.customSkin || 'CYAN'}
+            totalStars={totalStars}
+            onSelectSkin={handleSelectSkin}
+            onClose={() => setShowSkinSelectorModal(false)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

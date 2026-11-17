@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { BlockCommand, CommandType, LevelDefinition } from '../types/game';
-import { countTotalBlocks, blocksToPython } from '../utils/codeConverter';
+import { countTotalBlocks, blocksToPython, getLevelThresholds } from '../utils/codeConverter';
 import { sounds } from '../utils/audio';
 import {
   ArrowUp,
@@ -76,7 +76,9 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
   const sequenceContainerRef = React.useRef<HTMLDivElement>(null);
 
   const totalUsedBlocks = countTotalBlocks(mainBlocks, f1Blocks, f2Blocks);
-  const is3StarEligible = totalUsedBlocks <= level.maxBlocksFor3Stars;
+  const [threeStarLimit, twoStarLimit] = getLevelThresholds(level);
+  const is3StarEligible = totalUsedBlocks <= threeStarLimit;
+  const is2StarEligible = totalUsedBlocks <= twoStarLimit;
 
   // Active list reference
   const currentList =
@@ -88,14 +90,10 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
       ? setF1Blocks
       : setF2Blocks;
 
-  // Add command to active slot
-  const handleAddCommand = (type: CommandType) => {
-    if (isSimulating) return;
-    sounds.playStep();
-    setJustAddedNotice('Balok berhasil dipasang! 🚀');
-    setTimeout(() => setJustAddedNotice(null), 3500);
-
-    const newBlock: BlockCommand = {
+  const createBlockCommand = (type: CommandType): BlockCommand => {
+    const defaultVarName = Object.keys(level.initialVariables || {})[0] || 'baterai';
+    const defaultListName = Object.keys(level.initialLists || {})[0] || 'daftar_rute';
+    return {
       id: 'blk-' + Math.random().toString(36).substring(2, 9),
       type,
       repeatCount: type === 'REPEAT' ? 3 : undefined,
@@ -111,15 +109,12 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
         type === 'CHANGE_VAR' ||
         type === 'WHILE_VAR' ||
         type === 'IF_VAR'
-          ? 'baterai'
+          ? defaultVarName
           : undefined,
-      varValue: type === 'SET_VAR' ? 5 : 0,
+      varValue: type === 'SET_VAR' ? 5 : type === 'WHILE_VAR' || type === 'IF_VAR' ? 0 : undefined,
       varDelta: type === 'CHANGE_VAR' ? -1 : undefined,
       varOperator: type === 'WHILE_VAR' || type === 'IF_VAR' ? '>' : undefined,
-      listName:
-        type === 'READ_LIST'
-          ? Object.keys(level.initialLists || {})[0] || 'daftar_rute'
-          : undefined,
+      listName: type === 'READ_LIST' ? defaultListName : undefined,
       children:
         type === 'REPEAT' ||
         type === 'WHILE_VAR' ||
@@ -129,7 +124,64 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
           ? []
           : undefined,
     };
+  };
 
+  // Recursive tree update helpers
+  const mapBlocksRecursive = (
+    list: BlockCommand[],
+    targetId: string,
+    updater: (b: BlockCommand) => BlockCommand
+  ): BlockCommand[] =>
+    list.map((b) => {
+      const updated = b.id === targetId ? updater(b) : b;
+      if (updated.children) {
+        return {
+          ...updated,
+          children: mapBlocksRecursive(updated.children, targetId, updater),
+        };
+      }
+      return updated;
+    });
+
+  const deleteBlockRecursive = (list: BlockCommand[], targetId: string): BlockCommand[] =>
+    list
+      .filter((b) => b.id !== targetId)
+      .map((b) =>
+        b.children
+          ? { ...b, children: deleteBlockRecursive(b.children, targetId) }
+          : b
+      );
+
+  const moveSiblingRecursive = (
+    list: BlockCommand[],
+    targetId: string,
+    direction: 'UP' | 'DOWN'
+  ): BlockCommand[] => {
+    const idx = list.findIndex((b) => b.id === targetId);
+    if (idx !== -1) {
+      const targetIdx = direction === 'UP' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= list.length) return list;
+      const copy = [...list];
+      const temp = copy[idx];
+      copy[idx] = copy[targetIdx];
+      copy[targetIdx] = temp;
+      return copy;
+    }
+    return list.map((b) =>
+      b.children
+        ? { ...b, children: moveSiblingRecursive(b.children, targetId, direction) }
+        : b
+    );
+  };
+
+  // Add command to active slot
+  const handleAddCommand = (type: CommandType) => {
+    if (isSimulating) return;
+    sounds.playStep();
+    setJustAddedNotice('Balok berhasil dipasang! 🚀');
+    setTimeout(() => setJustAddedNotice(null), 3500);
+
+    const newBlock = createBlockCommand(type);
     setCurrentList((prev) => [...prev, newBlock]);
 
     // Smooth scroll to bottom so student immediately sees the new block added
@@ -143,98 +195,61 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
     }, 50);
   };
 
-  // Add child command into nested block
+  // Add child command into nested block (works at any nesting depth)
   const handleAddChildCommand = (parentId: string, type: CommandType) => {
     if (isSimulating) return;
     sounds.playStep();
-    setJustAddedNotice('Balok dimasukkan ke dalam loop! ✨');
+    setJustAddedNotice('Balok dimasukkan ke dalam blok! ✨');
     setTimeout(() => setJustAddedNotice(null), 3500);
 
-    const newChild: BlockCommand = {
-      id: 'blk-' + Math.random().toString(36).substring(2, 9),
-      type,
-    };
-
+    const newChild = createBlockCommand(type);
     setCurrentList((prev) =>
-      prev.map((b) => {
-        if (b.id === parentId) {
-          return {
-            ...b,
-            children: [...(b.children || []), newChild],
-          };
-        }
-        return b;
-      })
+      mapBlocksRecursive(prev, parentId, (b) => ({
+        ...b,
+        children: [...(b.children || []), newChild],
+      }))
     );
   };
 
-  // Delete block
-  const handleDeleteBlock = (id: string, parentId?: string) => {
+  // Delete block at any depth
+  const handleDeleteBlock = (id: string) => {
     if (isSimulating) return;
     sounds.playClick();
-
-    if (parentId) {
-      setCurrentList((prev) =>
-        prev.map((b) => {
-          if (b.id === parentId) {
-            return {
-              ...b,
-              children: (b.children || []).filter((c) => c.id !== id),
-            };
-          }
-          return b;
-        })
-      );
-    } else {
-      setCurrentList((prev) => prev.filter((b) => b.id !== id));
-    }
+    setCurrentList((prev) => deleteBlockRecursive(prev, id));
   };
 
-  // Move block up/down
-  const handleMoveBlock = (index: number, direction: 'UP' | 'DOWN') => {
+  // Move block up/down within its sibling list at any depth
+  const handleMoveBlock = (id: string, direction: 'UP' | 'DOWN') => {
     if (isSimulating) return;
     sounds.playClick();
-    const targetIdx = direction === 'UP' ? index - 1 : index + 1;
-    if (targetIdx < 0 || targetIdx >= currentList.length) return;
-
-    const copy = [...currentList];
-    const temp = copy[index];
-    copy[index] = copy[targetIdx];
-    copy[targetIdx] = temp;
-    setCurrentList(copy);
+    setCurrentList((prev) => moveSiblingRecursive(prev, id, direction));
   };
 
-  // Adjust repeat count
+  // Adjust repeat count at any depth
   const handleAdjustRepeat = (id: string, delta: number) => {
     if (isSimulating) return;
     sounds.playClick();
     setCurrentList((prev) =>
-      prev.map((b) => {
-        if (b.id === id) {
-          const current = b.repeatCount || 3;
-          const next = Math.max(2, Math.min(8, current + delta));
-          return { ...b, repeatCount: next };
-        }
-        return b;
+      mapBlocksRecursive(prev, id, (b) => {
+        const current = b.repeatCount || 3;
+        const next = Math.max(1, Math.min(12, current + delta));
+        return { ...b, repeatCount: next };
       })
     );
   };
 
-  // Toggle condition color
+  // Toggle condition color at any depth
   const handleToggleColor = (id: string) => {
     if (isSimulating) return;
     sounds.playClick();
     setCurrentList((prev) =>
-      prev.map((b) => {
-        if (b.id === id) {
-          const next = b.conditionColor === 'BLUE' ? 'YELLOW' : 'BLUE';
-          return {
-            ...b,
-            conditionColor: next,
-            conditionType: next === 'BLUE' ? 'IS_BLUE' : 'IS_YELLOW',
-          };
-        }
-        return b;
+      mapBlocksRecursive(prev, id, (b) => {
+        const next = b.conditionColor === 'BLUE' ? 'YELLOW' : 'BLUE';
+        return {
+          ...b,
+          conditionColor: next,
+          conditionType: next === 'BLUE' ? 'IS_BLUE' : 'IS_YELLOW',
+        };
       })
     );
   };
@@ -263,32 +278,39 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
     setTimeout(() => setCopiedPython(false), 2000);
   };
 
-  const pythonCode = blocksToPython(
-    mainBlocks,
-    f1Blocks,
-    f2Blocks,
-    level.initialVariables,
-    level.initialLists
+  const pythonCode = useMemo(
+    () =>
+      viewMode === 'PYTHON'
+        ? blocksToPython(
+            mainBlocks,
+            f1Blocks,
+            f2Blocks,
+            level.initialVariables,
+            level.initialLists
+          )
+        : '',
+    [viewMode, mainBlocks, f1Blocks, f2Blocks, level.initialVariables, level.initialLists]
   );
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-      {/* Top Header: Function Tabs & Visual/Python Toggle */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-slate-950/80 border-b border-slate-800 gap-2 shrink-0">
+    <div className="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-xl sm:rounded-2xl overflow-hidden shadow-xl">
+      {/* Top Header: Function Tabs, Compact Mobile Auto-Run & Visual/Python Toggle */}
+      <div className="flex items-center justify-between px-2.5 sm:px-3 py-2 bg-slate-950/80 border-b border-slate-800 gap-1.5 sm:gap-2 shrink-0 overflow-x-auto no-scrollbar">
         {/* Function / Main Tabs */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => {
               sounds.playClick();
               setActiveTab('MAIN');
             }}
-            className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+            className={`px-2.5 sm:px-3 py-1.5 min-h-[36px] text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
               activeTab === 'MAIN'
                 ? 'bg-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
-            Program Utama
+            <span className="sm:hidden">Utama</span>
+            <span className="hidden sm:inline">Program Utama</span>
           </button>
 
           {level.allowF1 && (
@@ -297,14 +319,14 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                 sounds.playClick();
                 setActiveTab('F1');
               }}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1.5 min-h-[36px] text-xs font-bold rounded-xl transition-all flex items-center gap-1 whitespace-nowrap ${
                 activeTab === 'F1'
                   ? 'bg-emerald-600 text-white shadow-md'
                   : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40'
               }`}
             >
               <Box className="w-3.5 h-3.5" />
-              <span>Fungsi F1</span>
+              <span>F1</span>
             </button>
           )}
 
@@ -314,63 +336,84 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                 sounds.playClick();
                 setActiveTab('F2');
               }}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1.5 min-h-[36px] text-xs font-bold rounded-xl transition-all flex items-center gap-1 whitespace-nowrap ${
                 activeTab === 'F2'
                   ? 'bg-purple-600 text-white shadow-md'
                   : 'text-purple-400 hover:text-purple-300 hover:bg-purple-950/40'
               }`}
             >
               <Box className="w-3.5 h-3.5" />
-              <span>Fungsi F2</span>
+              <span>F2</span>
             </button>
           )}
         </div>
 
-        {/* View Mode Toggle (Scratch Blocks vs Python) */}
-        <div className="flex items-center gap-1 p-0.5 bg-slate-900 border border-slate-800 rounded-xl">
-          <button
-            onClick={() => {
-              sounds.playClick();
-              setViewMode('BLOCKS');
-            }}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all ${
-              viewMode === 'BLOCKS'
-                ? 'bg-slate-800 text-cyan-300 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-            title="Tampilan Balok Visual Interaktif (Scratch-style)"
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Balok</span>
-          </button>
-          <button
-            onClick={() => {
-              sounds.playClick();
-              setViewMode('PYTHON');
-            }}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all ${
-              viewMode === 'PYTHON'
-                ? 'bg-slate-800 text-amber-300 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-            title="Lihat Kode Asli Python 3 (Persiapan SMP)"
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Python</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Primary Action Ribbon: JALANKAN KODE & Auto-Run Toggle */}
-      <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 gap-1.5 sm:gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Compact Mobile Auto-Run Toggle (hidden on md+ where full ribbon shows) */}
           {onToggleAutoRun && (
             <button
               onClick={() => {
                 sounds.playClick();
                 onToggleAutoRun();
               }}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 border shadow-sm ${
+              className={`md:hidden min-h-[36px] px-2.5 py-1 rounded-xl text-[11px] font-bold border flex items-center gap-1 whitespace-nowrap ${
+                autoRunEnabled
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60'
+                  : 'bg-slate-900 text-slate-400 border-slate-800'
+              }`}
+              title="Aktifkan/Matikan Jalan Otomatis"
+            >
+              <Zap className={`w-3.5 h-3.5 ${autoRunEnabled ? 'text-amber-400 fill-amber-400' : ''}`} />
+              <span>{autoRunEnabled ? 'Auto' : 'Manual'}</span>
+            </button>
+          )}
+
+          {/* View Mode Toggle (Scratch Blocks vs Python) */}
+          <div className="flex items-center gap-0.5 p-0.5 bg-slate-900 border border-slate-800 rounded-xl">
+            <button
+              onClick={() => {
+                sounds.playClick();
+                setViewMode('BLOCKS');
+              }}
+              className={`px-2.5 py-1 min-h-[32px] text-xs font-semibold rounded-lg flex items-center gap-1 transition-all ${
+                viewMode === 'BLOCKS'
+                  ? 'bg-slate-800 text-cyan-300 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Tampilan Balok Visual Interaktif (Scratch-style)"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Balok</span>
+            </button>
+            <button
+              onClick={() => {
+                sounds.playClick();
+                setViewMode('PYTHON');
+              }}
+              className={`px-2.5 py-1 min-h-[32px] text-xs font-semibold rounded-lg flex items-center gap-1 transition-all ${
+                viewMode === 'PYTHON'
+                  ? 'bg-slate-800 text-amber-300 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Lihat Kode Asli Python 3 (Persiapan SMP)"
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span>Python</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Action Ribbon: JALANKAN KODE & Auto-Run Toggle (hidden on mobile because unified bottom dock handles Run/Step) */}
+      <div className="hidden md:flex items-center justify-between px-3 py-2 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 gap-2 shrink-0">
+        <div className="flex items-center gap-2">
+          {onToggleAutoRun && (
+            <button
+              onClick={() => {
+                sounds.playClick();
+                onToggleAutoRun();
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border shadow-sm ${
                 autoRunEnabled
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-amber-500/20 ring-1 ring-amber-400/40'
                   : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-300 hover:bg-slate-850'
@@ -378,43 +421,40 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
               title="Ketika aktif, program akan otomatis diuji setiap kali kamu selesai menyusun balok"
             >
               <Zap className={`w-3.5 h-3.5 ${autoRunEnabled ? 'text-amber-400 fill-amber-400 animate-pulse' : ''}`} />
-              <span className="hidden sm:inline">⚡ Jalan Otomatis: {autoRunEnabled ? 'AKTIF' : 'MATI'}</span>
-              <span className="sm:hidden">⚡ {autoRunEnabled ? 'Otomatis' : 'Manual'}</span>
+              <span>⚡ Jalan Otomatis: {autoRunEnabled ? 'AKTIF' : 'MATI'}</span>
             </button>
           )}
 
           {autoRunCountdown !== null && autoRunCountdown !== undefined && (
-            <span className="text-[10px] sm:text-[11px] text-amber-300 font-mono flex items-center gap-1 animate-pulse px-2 py-0.5 rounded-lg bg-amber-950/60 border border-amber-800/40">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+            <span className="text-[11px] text-amber-300 font-mono flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-950/60 border border-amber-800/40">
               <span>({autoRunCountdown}s)</span>
             </span>
           )}
 
           {justAddedNotice && (
-            <span className="text-[10px] sm:text-[11px] bg-emerald-400 text-slate-950 font-bold px-2 sm:px-2.5 py-0.5 rounded-full shadow animate-pulse">
+            <span className="text-[11px] bg-emerald-400 text-slate-950 font-bold px-2.5 py-0.5 rounded-full shadow">
               {justAddedNotice}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-2">
           {onStepOnce && (
             <button
               onClick={onStepOnce}
               disabled={isSimulating}
-              className="px-2 sm:px-2.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-cyan-300 border border-slate-700 rounded-xl text-[11px] sm:text-xs font-semibold transition-colors disabled:opacity-40 flex items-center gap-1"
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-cyan-300 border border-slate-700 rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 flex items-center gap-1"
               title="Jalankan 1 Langkah Debug"
             >
               <StepForward className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">1 Langkah</span>
-              <span className="sm:hidden">Step</span>
+              <span>1 Langkah</span>
             </button>
           )}
 
           {onRunCode && (
             <button
               onClick={onRunCode}
-              className={`px-3 sm:px-5 py-2 rounded-xl text-xs sm:text-xs font-black font-display tracking-wider shadow-lg transition-all flex items-center gap-1.5 min-h-[40px] ${
+              className={`px-5 py-2 rounded-xl text-xs font-black font-display tracking-wider shadow-lg transition-all flex items-center gap-1.5 min-h-[40px] ${
                 isSimulating
                   ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30 ring-2 ring-amber-400/50 animate-pulse'
                   : 'bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-500 hover:from-emerald-300 hover:to-blue-400 text-slate-950 shadow-cyan-500/30 ring-2 ring-cyan-400/50 transform hover:scale-105 active:scale-95'
@@ -430,23 +470,34 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
 
       {/* Subheader: Block Count & Action Buttons */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-950/40 border-b border-slate-800/80 text-xs shrink-0">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="text-slate-400 hidden sm:inline">Total Balok:</span>
-          <span className="text-slate-400 sm:hidden">Balok:</span>
+        <div className="flex items-center gap-1.5 tabular-nums">
+          <span className="text-slate-400">Balok:</span>
           <span
-            className={`font-mono font-bold px-1.5 py-0.2 rounded ${
-              is3StarEligible ? 'bg-emerald-950 text-emerald-300' : 'bg-amber-950 text-amber-300'
+            className={`font-mono font-bold px-1.5 py-0.5 rounded ${
+              is3StarEligible
+                ? 'bg-emerald-950 text-emerald-300'
+                : is2StarEligible
+                ? 'bg-amber-950 text-amber-300'
+                : 'bg-rose-950 text-rose-300'
             }`}
           >
             {totalUsedBlocks}
           </span>
           <span className="text-slate-600">/</span>
-          <span className="text-slate-400 hidden sm:inline">Target 3★:</span>
-          <span className="text-slate-400 sm:hidden">★:</span>
-          <span className="font-mono font-bold text-slate-300">≤ {level.maxBlocksFor3Stars}</span>
+          <span
+            className="font-mono font-bold text-slate-300"
+            title={`Acuan Bintang — 3★: maks. ${threeStarLimit} balok · 2★: maks. ${twoStarLimit} balok`}
+          >
+            Maks. {threeStarLimit}★
+          </span>
+          {justAddedNotice && (
+            <span className="md:hidden text-[10px] bg-emerald-400 text-slate-950 font-bold px-2 py-0.5 rounded-full ml-1 truncate max-w-[130px]">
+              {justAddedNotice}
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {onLoadStarterCode && (
             <button
               onClick={() => {
@@ -454,7 +505,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                 onLoadStarterCode();
               }}
               disabled={isSimulating}
-              className="flex items-center gap-1 text-[11px] text-cyan-300 hover:text-cyan-200 bg-cyan-950/80 border border-cyan-800/80 px-2.5 py-1 rounded-lg transition-colors font-semibold disabled:opacity-50"
+              className="hidden md:flex items-center gap-1 text-[11px] text-cyan-300 hover:text-cyan-200 bg-cyan-950/80 border border-cyan-800/80 px-2.5 py-1 rounded-lg transition-colors font-semibold disabled:opacity-50"
               title="Muat kembali contoh susunan balok untuk level ini"
             >
               <HelpCircle className="w-3 h-3" />
@@ -466,10 +517,10 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
             <button
               onClick={handleClearCurrent}
               disabled={isSimulating}
-              className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 px-2.5 py-1 min-h-[32px] rounded-lg transition-colors disabled:opacity-50 font-semibold"
               title="Hapus semua balok di tab ini"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3.5 h-3.5" />
               <span>Kosongkan</span>
             </button>
           )}
@@ -478,15 +529,15 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
 
       {/* Main Workspace Body */}
       {viewMode === 'PYTHON' ? (
-        <div className="flex-1 flex flex-col p-4 overflow-hidden bg-slate-950">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-amber-400 font-bold flex items-center gap-1.5">
-              <Code2 className="w-4 h-4" />
-              Sintaks Python 3 (Berdasarkan Balok Kodingmu)
+        <div className="flex-1 flex flex-col p-3 sm:p-4 overflow-hidden bg-slate-950">
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <span className="text-xs text-amber-400 font-bold flex items-center gap-1.5 truncate">
+              <Code2 className="w-4 h-4 shrink-0" />
+              <span className="truncate">Sintaks Python 3</span>
             </span>
             <button
               onClick={handleCopyPython}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors font-medium"
+              className="flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors font-medium shrink-0"
             >
               {copiedPython ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedPython ? 'Tersalin!' : 'Salin Python'}</span>
@@ -500,20 +551,23 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
           </p>
         </div>
       ) : (
-        /* WORKSPACE BODY - PALET DAN SUSUNAN KODE SELALU TERLIHAT BERSAMAAN */
-        <div className="flex-1 flex flex-col sm:grid sm:grid-cols-12 min-h-0 divide-y sm:divide-y-0 sm:divide-x divide-slate-800/80 overflow-hidden">
-          {/* BAGIAN KIRI / ATAS: PILIH BALOK PERINTAH (PALETTE) */}
-          <div className="h-48 sm:h-full sm:col-span-5 flex flex-col min-h-0 bg-slate-900/60 overflow-hidden shrink-0 sm:shrink">
-            <div className="px-3 py-2 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between shrink-0">
-              <span className="text-xs font-black text-cyan-300 flex items-center gap-1.5 uppercase tracking-wider font-display">
+        /* WORKSPACE BODY: On mobile (< sm), flex-col-reverse puts sequence ABOVE palette for effortless thumb tapping! */
+        <div className="flex-1 flex flex-col-reverse sm:grid sm:grid-cols-12 min-h-0 sm:divide-x divide-slate-800/80 overflow-hidden">
+          {/* PALETTE BALOK PERINTAH (Bottom thumb-zone on mobile, Left 5 cols on sm+) */}
+          <div className="max-h-[44%] sm:max-h-none sm:h-full sm:col-span-5 flex flex-col min-h-0 bg-slate-900/90 border-t sm:border-t-0 border-slate-700/80 overflow-hidden shrink-0 sm:shrink">
+            <div className="px-3 py-1.5 sm:py-2 bg-slate-950/60 border-b border-slate-800/80 flex items-center justify-between shrink-0">
+              <span className="text-[11px] sm:text-xs font-black text-cyan-300 flex items-center gap-1.5 uppercase tracking-wider font-display">
                 <Box className="w-3.5 h-3.5 text-cyan-400" />
-                <span>PILIH BALOK</span>
+                <span>PILIH BALOK PERINTAH</span>
               </span>
-              <span className="text-[10px] text-cyan-400/80 font-mono hidden sm:inline">Klik = Masuk ➔</span>
+              <span className="text-[10px] text-cyan-400/80 font-mono">
+                <span className="sm:hidden">Tap = Tambah ↑</span>
+                <span className="hidden sm:inline">Klik = Masuk ➔</span>
+              </span>
             </div>
 
             {/* Filter Kategori Balok */}
-            <div className="px-2 py-1.5 bg-slate-950/40 border-b border-slate-800/60 flex items-center gap-1 overflow-x-auto shrink-0">
+            <div className="px-2 py-1.5 bg-slate-950/40 border-b border-slate-800/60 flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
               {(
                 [
                   { id: 'ALL' as PaletteCategory, label: 'Semua' },
@@ -530,7 +584,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                     sounds.playClick();
                     setPaletteCategory(cat.id);
                   }}
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all shrink-0 ${
+                  className={`px-2.5 py-1 min-h-[32px] rounded-lg text-[11px] font-bold transition-all shrink-0 ${
                     paletteCategory === cat.id
                       ? 'bg-cyan-500 text-slate-950 shadow-sm'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -541,18 +595,18 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
               ))}
             </div>
 
-            {/* Tombol-tombol Balok Koding */}
-            <div className="flex-1 p-2 overflow-y-auto grid grid-cols-2 sm:grid-cols-1 xl:grid-cols-2 gap-1.5 content-start">
+            {/* Tombol-tombol Balok Koding (Large 44px touch targets on mobile) */}
+            <div className="flex-1 p-2 overflow-y-auto grid grid-cols-2 sm:grid-cols-1 xl:grid-cols-2 gap-1.5 sm:gap-1.5 content-start">
               {/* MOVE_FORWARD */}
               {level.allowedCommands.includes('MOVE_FORWARD') &&
                 (paletteCategory === 'ALL' || paletteCategory === 'MOTION') && (
                   <button
                     onClick={() => handleAddCommand('MOVE_FORWARD')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-blue-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs sm:text-[11px] font-bold rounded-xl border border-blue-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Maju 1 Petak ke Depan"
                   >
-                    <ArrowUp className="w-3.5 h-3.5 shrink-0 text-cyan-200" />
+                    <ArrowUp className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 text-cyan-200" />
                     <span className="truncate">🚶 Maju 1 Petak</span>
                   </button>
                 )}
@@ -563,7 +617,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('TURN_LEFT')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-blue-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-blue-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Putar Kiri 90 Derajat"
                   >
                     <RotateCcw className="w-3.5 h-3.5 shrink-0 text-cyan-200" />
@@ -577,7 +631,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('TURN_RIGHT')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-blue-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-blue-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Putar Kanan 90 Derajat"
                   >
                     <RotateCw className="w-3.5 h-3.5 shrink-0 text-cyan-200" />
@@ -591,7 +645,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('JUMP')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-indigo-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-indigo-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Lompat Naik atau Turun Tebing"
                   >
                     <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-indigo-200" />
@@ -605,7 +659,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('COLLECT')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-amber-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-amber-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Ambil Kristal Energi"
                   >
                     <Sparkles className="w-3.5 h-3.5 shrink-0 text-amber-200" />
@@ -619,7 +673,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('TOGGLE_SWITCH')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-amber-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-amber-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Nyalakan Saklar Laser"
                   >
                     <ToggleLeft className="w-3.5 h-3.5 shrink-0 text-amber-200" />
@@ -633,7 +687,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('REPEAT')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-purple-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-purple-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Ulangi Instruksi Berkali-kali"
                   >
                     <Repeat className="w-3.5 h-3.5 shrink-0 text-purple-200" />
@@ -647,7 +701,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('WHILE_VAR')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-purple-700 hover:bg-purple-600 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-purple-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-purple-700 hover:bg-purple-600 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-purple-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Perulangan Berdasarkan Variabel Baterai"
                   >
                     <Repeat className="w-3.5 h-3.5 shrink-0 text-purple-200" />
@@ -661,7 +715,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('READ_LIST')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-blue-700 hover:bg-blue-600 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-blue-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-blue-700 hover:bg-blue-600 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-blue-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Baca Data Rute dari List Array"
                   >
                     <ListOrdered className="w-3.5 h-3.5 shrink-0 text-cyan-200" />
@@ -675,7 +729,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('SET_VAR')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-teal-600 hover:bg-teal-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-teal-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-teal-600 hover:bg-teal-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-teal-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Atur Nilai Variabel"
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5 shrink-0 text-teal-200" />
@@ -689,7 +743,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('CHANGE_VAR')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-teal-600 hover:bg-teal-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-teal-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-teal-600 hover:bg-teal-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-teal-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Tambah/Kurangi Nilai Variabel"
                   >
                     <BatteryCharging className="w-3.5 h-3.5 shrink-0 text-teal-200" />
@@ -703,7 +757,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('IF_VAR')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-orange-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-orange-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Logika Percabangan Nilai Variabel"
                   >
                     <GitBranch className="w-3.5 h-3.5 shrink-0 text-amber-200" />
@@ -717,11 +771,25 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('IF_COLOR')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-orange-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-orange-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Periksa Warna Petak Tempat Robot Berada"
                   >
                     <GitBranch className="w-3.5 h-3.5 shrink-0 text-amber-200" />
                     <span className="truncate">🎨 Cek Warna</span>
+                  </button>
+                )}
+
+              {/* IF_OBSTACLE */}
+              {level.allowedCommands.includes('IF_OBSTACLE') &&
+                (paletteCategory === 'ALL' || paletteCategory === 'LOGIC') && (
+                  <button
+                    onClick={() => handleAddCommand('IF_OBSTACLE')}
+                    disabled={isSimulating}
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-orange-700 hover:bg-orange-600 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-orange-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    title="Deteksi Tebing, Laser, atau Jurang di Depan"
+                  >
+                    <GitBranch className="w-3.5 h-3.5 shrink-0 text-amber-200" />
+                    <span className="truncate">🚧 Jika Halangan</span>
                   </button>
                 )}
 
@@ -731,7 +799,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('CALL_F1')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-emerald-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-emerald-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Panggil Fungsi F1"
                   >
                     <Box className="w-3.5 h-3.5 shrink-0 text-emerald-200" />
@@ -745,7 +813,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   <button
                     onClick={() => handleAddCommand('CALL_F2')}
                     disabled={isSimulating}
-                    className="flex items-center gap-1.5 p-2 bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-emerald-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
+                    className="flex items-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-2.5 py-2 bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white text-[11px] font-bold rounded-xl border border-emerald-400/30 shadow transition-all disabled:opacity-50 text-left cursor-pointer"
                     title="Panggil Fungsi F2"
                   >
                     <Box className="w-3.5 h-3.5 shrink-0 text-emerald-200" />
@@ -801,15 +869,15 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                       block={block}
                       index={idx}
                       total={currentList.length}
+                      level={level}
+                      depth={0}
                       isActive={block.id === activeExecutingBlockId}
                       isSimulating={isSimulating}
-                      onDelete={() => handleDeleteBlock(block.id)}
-                      onMoveUp={() => handleMoveBlock(idx, 'UP')}
-                      onMoveDown={() => handleMoveBlock(idx, 'DOWN')}
-                      onAdjustRepeat={(d) => handleAdjustRepeat(block.id, d)}
-                      onToggleColor={() => handleToggleColor(block.id)}
-                      onAddChild={(type) => handleAddChildCommand(block.id, type)}
-                      onDeleteChild={(childId) => handleDeleteBlock(childId, block.id)}
+                      onDelete={handleDeleteBlock}
+                      onMove={handleMoveBlock}
+                      onAdjustRepeat={handleAdjustRepeat}
+                      onToggleColor={handleToggleColor}
+                      onAddChild={handleAddChildCommand}
                       activeExecutingBlockId={activeExecutingBlockId}
                     />
                   ))}
@@ -823,36 +891,51 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
   );
 };
 
-// Child Block Card component with Scratch-style aesthetics & nesting support
+// Child Block Card component with Scratch-style aesthetics & full recursive nesting support
 interface BlockCardProps {
   block: BlockCommand;
   index: number;
   total: number;
+  level: LevelDefinition;
+  depth: number;
   isActive: boolean;
   isSimulating: boolean;
-  onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  onAdjustRepeat: (delta: number) => void;
-  onToggleColor: () => void;
-  onAddChild: (type: CommandType) => void;
-  onDeleteChild: (childId: string) => void;
+  onDelete: (id: string) => void;
+  onMove: (id: string, direction: 'UP' | 'DOWN') => void;
+  onAdjustRepeat: (id: string, delta: number) => void;
+  onToggleColor: (id: string) => void;
+  onAddChild: (parentId: string, type: CommandType) => void;
   activeExecutingBlockId?: string;
 }
 
-const BlockCard: React.FC<BlockCardProps> = ({
+const CHILD_COMMAND_LABELS: { type: CommandType; shortLabel: string; title: string }[] = [
+  { type: 'MOVE_FORWARD', shortLabel: '+ Maju', title: 'Tambah Maju' },
+  { type: 'TURN_LEFT', shortLabel: '+ Kiri', title: 'Tambah Putar Kiri' },
+  { type: 'TURN_RIGHT', shortLabel: '+ Kanan', title: 'Tambah Putar Kanan' },
+  { type: 'JUMP', shortLabel: '+ Lompat', title: 'Tambah Lompat' },
+  { type: 'COLLECT', shortLabel: '+ Ambil', title: 'Tambah Ambil Kristal' },
+  { type: 'TOGGLE_SWITCH', shortLabel: '+ Saklar', title: 'Tambah Tekan Saklar' },
+  { type: 'IF_COLOR', shortLabel: '+ Cek Warna', title: 'Tambah Cek Warna' },
+  { type: 'IF_OBSTACLE', shortLabel: '+ Halangan', title: 'Tambah Jika Halangan' },
+  { type: 'IF_VAR', shortLabel: '+ Jika Nilai', title: 'Tambah Jika Nilai' },
+  { type: 'REPEAT', shortLabel: '+ Ulangi', title: 'Tambah Loop Ulangi' },
+  { type: 'CALL_F1', shortLabel: '+ F1()', title: 'Tambah Panggil F1()' },
+  { type: 'CALL_F2', shortLabel: '+ F2()', title: 'Tambah Panggil F2()' },
+];
+
+const BlockCard: React.FC<BlockCardProps> = React.memo(({
   block,
   index,
   total,
+  level,
+  depth,
   isActive,
   isSimulating,
   onDelete,
-  onMoveUp,
-  onMoveDown,
+  onMove,
   onAdjustRepeat,
   onToggleColor,
   onAddChild,
-  onDeleteChild,
   activeExecutingBlockId,
 }) => {
   const isLoop = block.type === 'REPEAT';
@@ -895,11 +978,11 @@ const BlockCard: React.FC<BlockCardProps> = ({
       bgStyle = 'bg-purple-700 border-purple-400/40 text-white';
       break;
     case 'WHILE_VAR':
-      label = `Selama (${block.varName || 'baterai'} > ${block.varValue ?? 0})`;
+      label = `Selama (${block.varName || 'baterai'} ${block.varOperator || '>'} ${block.varValue ?? 0})`;
       bgStyle = 'bg-purple-800 border-purple-400/40 text-white';
       break;
     case 'IF_VAR':
-      label = `Jika (${block.varName || 'baterai'} > ${block.varValue ?? 0})`;
+      label = `Jika (${block.varName || 'baterai'} ${block.varOperator || '>'} ${block.varValue ?? 0})`;
       bgStyle = 'bg-orange-600 border-orange-400/40 text-white';
       break;
     case 'READ_LIST':
@@ -932,6 +1015,18 @@ const BlockCard: React.FC<BlockCardProps> = ({
       break;
   }
 
+  const availableChildActions = CHILD_COMMAND_LABELS.filter((item) => {
+    const isNestContainer =
+      item.type === 'REPEAT' ||
+      item.type === 'IF_COLOR' ||
+      item.type === 'IF_OBSTACLE' ||
+      item.type === 'IF_VAR';
+    if (isNestContainer && depth >= 2) return false;
+    if (item.type === 'CALL_F1') return !!level.allowF1;
+    if (item.type === 'CALL_F2') return !!level.allowF2;
+    return level.allowedCommands.includes(item.type);
+  });
+
   return (
     <div
       className={`relative rounded-xl border p-2.5 transition-all shadow-md ${bgStyle} ${
@@ -941,7 +1036,7 @@ const BlockCard: React.FC<BlockCardProps> = ({
       }`}
     >
       {/* Top Header of the Block */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-5 h-5 rounded-full bg-black/30 flex items-center justify-center text-[10px] font-mono font-bold shrink-0">
             {index + 1}
@@ -954,143 +1049,117 @@ const BlockCard: React.FC<BlockCardProps> = ({
           )}
         </div>
 
-        {/* Action Controls: Move Up, Move Down, Delete */}
+        {/* Action Controls: Move Up, Move Down, Delete (touch-sized on mobile) */}
         <div className="flex items-center gap-1 shrink-0">
           {isLoop && (
-            <div className="flex items-center gap-1 bg-black/25 px-1.5 py-0.5 rounded-lg mr-1">
+            <div className="flex items-center gap-0.5 bg-black/25 px-1 py-0.5 rounded-lg mr-0.5">
               <button
-                onClick={() => onAdjustRepeat(-1)}
-                disabled={isSimulating || (block.repeatCount || 3) <= 2}
-                className="hover:text-yellow-300 disabled:opacity-40 p-0.5"
+                onClick={() => onAdjustRepeat(block.id, -1)}
+                disabled={isSimulating || (block.repeatCount || 3) <= 1}
+                className="min-h-[32px] min-w-[32px] sm:min-h-0 sm:min-w-0 flex items-center justify-center hover:text-yellow-300 disabled:opacity-40 p-1 sm:p-0.5"
                 title="Kurangi kali perulangan"
               >
-                <Minus className="w-3 h-3" />
+                <Minus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
               </button>
-              <span className="text-[11px] font-mono font-bold px-1">
+              <span className="text-xs sm:text-[11px] font-mono font-bold px-1 tabular-nums">
                 {block.repeatCount || 3}x
               </span>
               <button
-                onClick={() => onAdjustRepeat(1)}
-                disabled={isSimulating || (block.repeatCount || 3) >= 8}
-                className="hover:text-yellow-300 disabled:opacity-40 p-0.5"
+                onClick={() => onAdjustRepeat(block.id, 1)}
+                disabled={isSimulating || (block.repeatCount || 3) >= 12}
+                className="min-h-[32px] min-w-[32px] sm:min-h-0 sm:min-w-0 flex items-center justify-center hover:text-yellow-300 disabled:opacity-40 p-1 sm:p-0.5"
                 title="Tambah kali perulangan"
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
               </button>
             </div>
           )}
 
           {isIfColor && (
             <button
-              onClick={onToggleColor}
+              onClick={() => onToggleColor(block.id)}
               disabled={isSimulating}
-              className="text-[10px] font-bold px-2 py-0.5 bg-black/30 rounded-lg mr-1 hover:bg-black/50 transition-colors"
+              className="text-[11px] sm:text-[10px] font-bold px-2.5 py-1.5 sm:px-2 sm:py-0.5 bg-black/30 rounded-lg mr-0.5 hover:bg-black/50 transition-colors min-h-[32px] sm:min-h-0"
             >
-              Ganti: {block.conditionColor === 'BLUE' ? 'Ubin Kuning' : 'Ubin Biru'}
+              {block.conditionColor === 'BLUE' ? 'Ubin Biru' : 'Ubin Kuning'}
             </button>
           )}
 
           <button
-            onClick={onMoveUp}
+            onClick={() => onMove(block.id, 'UP')}
             disabled={isSimulating || index === 0}
-            className="p-1 hover:bg-black/20 rounded disabled:opacity-30"
+            className="min-h-[34px] min-w-[34px] sm:min-h-0 sm:min-w-0 flex items-center justify-center p-1.5 sm:p-1 hover:bg-black/20 rounded-lg disabled:opacity-30"
             title="Geser ke Atas"
           >
-            <ChevronUp className="w-3.5 h-3.5" />
+            <ChevronUp className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           </button>
           <button
-            onClick={onMoveDown}
+            onClick={() => onMove(block.id, 'DOWN')}
             disabled={isSimulating || index === total - 1}
-            className="p-1 hover:bg-black/20 rounded disabled:opacity-30"
+            className="min-h-[34px] min-w-[34px] sm:min-h-0 sm:min-w-0 flex items-center justify-center p-1.5 sm:p-1 hover:bg-black/20 rounded-lg disabled:opacity-30"
             title="Geser ke Bawah"
           >
-            <ChevronDown className="w-3.5 h-3.5" />
+            <ChevronDown className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           </button>
           <button
-            onClick={onDelete}
+            onClick={() => onDelete(block.id)}
             disabled={isSimulating}
-            className="p-1 hover:bg-rose-600 rounded transition-colors disabled:opacity-30"
+            className="min-h-[34px] min-w-[34px] sm:min-h-0 sm:min-w-0 flex items-center justify-center p-1.5 sm:p-1 hover:bg-rose-600 rounded-lg transition-colors disabled:opacity-30"
             title="Hapus Balok"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Nested Body for Containers (Repeat / If) */}
+      {/* Nested Body for Containers (Repeat / While / If) */}
       {isContainer && (
-        <div className="mt-2.5 pl-3 border-l-2 border-white/40 space-y-1.5 bg-black/20 p-2 rounded-lg">
-          <div className="text-[10px] font-semibold opacity-90 mb-1 flex items-center justify-between">
-            <span>Balok di dalam perulangan:</span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => onAddChild('MOVE_FORWARD')}
-                disabled={isSimulating}
-                className="px-1.5 py-0.5 bg-white/20 hover:bg-white/30 rounded text-[9px] font-bold transition-colors"
-                title="Tambah Maju di dalam loop"
-              >
-                + Maju
-              </button>
-              <button
-                onClick={() => onAddChild('COLLECT')}
-                disabled={isSimulating}
-                className="px-1.5 py-0.5 bg-white/20 hover:bg-white/30 rounded text-[9px] font-bold transition-colors"
-                title="Tambah Ambil di dalam loop"
-              >
-                + Ambil
-              </button>
-              <button
-                onClick={() => onAddChild('TURN_RIGHT')}
-                disabled={isSimulating}
-                className="px-1.5 py-0.5 bg-white/20 hover:bg-white/30 rounded text-[9px] font-bold transition-colors"
-                title="Tambah Belok di dalam loop"
-              >
-                + Kanan
-              </button>
+        <div className="mt-2.5 pl-2.5 border-l-2 border-white/40 space-y-2 bg-black/20 p-2 rounded-lg">
+          <div className="text-[11px] sm:text-[10px] font-semibold opacity-95 flex flex-col gap-1.5">
+            <span>Isi di dalam blok:</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {availableChildActions.map((act) => (
+                <button
+                  key={act.type}
+                  onClick={() => onAddChild(block.id, act.type)}
+                  disabled={isSimulating}
+                  className="px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 min-h-[34px] sm:min-h-0 bg-white/20 hover:bg-white/30 active:scale-95 rounded-lg sm:rounded text-[11px] sm:text-[9px] font-bold transition-colors disabled:opacity-40"
+                  title={act.title}
+                >
+                  {act.shortLabel}
+                </button>
+              ))}
             </div>
           </div>
 
           {block.children && block.children.length > 0 ? (
-            block.children.map((child, cIdx) => (
-              <div
-                key={child.id}
-                className={`flex items-center justify-between p-1.5 rounded-lg bg-black/30 text-xs ${
-                  child.id === activeExecutingBlockId ? 'ring-2 ring-yellow-400 bg-yellow-950/80' : ''
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] opacity-75 font-mono">{cIdx + 1}.</span>
-                  <span className="font-semibold">
-                    {child.type === 'MOVE_FORWARD'
-                      ? 'Maju 1 Langkah'
-                      : child.type === 'TURN_LEFT'
-                      ? 'Putar Kiri'
-                      : child.type === 'TURN_RIGHT'
-                      ? 'Putar Kanan'
-                      : child.type === 'JUMP'
-                      ? 'Lompat'
-                      : child.type === 'COLLECT'
-                      ? 'Ambil Kristal'
-                      : child.type}
-                  </span>
-                </div>
-                <button
-                  onClick={() => onDeleteChild(child.id)}
-                  disabled={isSimulating}
-                  className="p-1 hover:text-rose-300 text-white/60"
-                  title="Hapus sub-balok"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
-            ))
+            <div className="space-y-1.5">
+              {block.children.map((child, cIdx) => (
+                <BlockCard
+                  key={child.id}
+                  block={child}
+                  index={cIdx}
+                  total={block.children?.length || 0}
+                  level={level}
+                  depth={depth + 1}
+                  isActive={child.id === activeExecutingBlockId}
+                  isSimulating={isSimulating}
+                  onDelete={onDelete}
+                  onMove={onMove}
+                  onAdjustRepeat={onAdjustRepeat}
+                  onToggleColor={onToggleColor}
+                  onAddChild={onAddChild}
+                  activeExecutingBlockId={activeExecutingBlockId}
+                />
+              ))}
+            </div>
           ) : (
             <div className="text-[10px] text-white/70 italic py-1">
-              (Loop masih kosong, klik tombol di atas untuk mengisi balok)
+              (Blok masih kosong, klik tombol + di atas untuk mengisi perintah)
             </div>
           )}
         </div>
       )}
     </div>
   );
-};
+});

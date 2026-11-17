@@ -148,11 +148,11 @@ export const GoogleCloudSyncModal: React.FC<GoogleCloudSyncModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg max-h-[92dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header with Google Brand styling */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/70">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800 bg-slate-950/70 shrink-0 gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {/* Google SVG G icon */}
             <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-md shrink-0">
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -174,9 +174,9 @@ export const GoogleCloudSyncModal: React.FC<GoogleCloudSyncModalProps> = ({
                 />
               </svg>
             </div>
-            <div>
-              <h2 className="text-base font-bold font-display text-white">Sinkronisasi Google Cloud</h2>
-              <p className="text-xs text-slate-400">Simpan otomatis seluruh progres koding Odibot</p>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold font-display text-white truncate">Sinkronisasi Google Cloud</h2>
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate">Simpan otomatis seluruh progres koding Odibot</p>
             </div>
           </div>
 
@@ -185,7 +185,7 @@ export const GoogleCloudSyncModal: React.FC<GoogleCloudSyncModalProps> = ({
               sounds.playClick();
               onClose();
             }}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+            className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -193,13 +193,13 @@ export const GoogleCloudSyncModal: React.FC<GoogleCloudSyncModalProps> = ({
 
         {/* Sync Success / Alert Toast */}
         {syncSuccessMessage && (
-          <div className="mx-6 mt-4 p-3 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-emerald-200 text-xs flex items-center gap-2 animate-in slide-in-from-top-1">
+          <div className="mx-4 sm:mx-6 mt-3 p-3 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-emerald-200 text-xs flex items-center gap-2 animate-in slide-in-from-top-1 shrink-0">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{syncSuccessMessage}</span>
           </div>
         )}
 
-        <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
           {/* USER SIGNED IN STATE */}
           {user ? (
             <div className="space-y-4">

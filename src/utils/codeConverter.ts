@@ -1,4 +1,4 @@
-import { BlockCommand } from '../types/game';
+import { BlockCommand, LevelDefinition } from '../types/game';
 
 /**
  * Converts visual block structures to formatted Python code for Indonesian SD Kelas 6 students
@@ -12,7 +12,7 @@ export function blocksToPython(
 ): string {
   const lines: string[] = [
     '# Program Misi Koding Robot Kodi (Python 3)',
-    '# Kurikulum Informatika SD Kelas 6 - Fase C',
+    '# Kurikulum Koding dan Kecerdasan Artifisial (KA) SD Kelas 6 - Fase C',
     '',
   ];
 
@@ -217,4 +217,29 @@ export function countTotalBlocks(
     (f1Blocks ? countList(f1Blocks) : 0) +
     (f2Blocks ? countList(f2Blocks) : 0)
   );
+}
+
+/**
+ * Mengembalikan array nilai acuan jumlah balok/langkah dinamis per level:
+ * [batasBintang3, batasBintang2, batasBintang1]
+ * Evaluasi menggunakan operator <= sehingga mencapai angka batas tetap meraih bintang tersebut.
+ */
+export function getLevelThresholds(level: LevelDefinition): [number, number, number] {
+  const threeStarLimit = Math.max(1, level.maxBlocksFor3Stars);
+
+  let activeTiles = 0;
+  let crystalCount = 0;
+  for (const row of level.tiles) {
+    for (const tile of row) {
+      if (tile.type !== 'EMPTY') activeTiles++;
+      if (tile.hasCrystal) crystalCount++;
+    }
+  }
+
+  const complexityMargin = Math.floor(activeTiles / 8) + Math.floor(crystalCount / 2);
+  const twoStarBuffer = Math.max(2, Math.ceil(threeStarLimit * 0.35), complexityMargin);
+  const twoStarLimit = threeStarLimit + twoStarBuffer;
+  const oneStarLimit = twoStarLimit + Math.max(4, Math.ceil(threeStarLimit * 0.6));
+
+  return [threeStarLimit, twoStarLimit, oneStarLimit];
 }

@@ -25,12 +25,13 @@ export const OdibotMascot: React.FC<OdibotMascotProps> = ({
 
   return (
     <div className={`relative inline-block select-none ${className}`}>
-      {/* Glow Aura */}
-      <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-500 to-amber-400 opacity-60 blur-md pointer-events-none animate-pulse" />
-
-      {/* Main Mascot Container */}
+      {/* Lightweight Main Mascot Container (zero GPU blur compositing overhead) */}
       <div
-        className={`relative ${sizeClasses} rounded-2xl overflow-hidden border-2 border-cyan-400 shadow-xl bg-gradient-to-b from-slate-850 to-slate-950 flex items-center justify-center`}
+        className={`relative ${sizeClasses} rounded-2xl overflow-hidden border-2 border-cyan-400 bg-slate-900 flex items-center justify-center ${
+          size === 'sm'
+            ? 'shadow-[0_0_10px_rgba(6,182,212,0.35)]'
+            : 'shadow-[0_0_24px_rgba(6,182,212,0.4)]'
+        }`}
       >
         {!imageFailed ? (
           <img
@@ -38,7 +39,7 @@ export const OdibotMascot: React.FC<OdibotMascotProps> = ({
             alt={alt}
             onError={() => setImageFailed(true)}
             className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
-            loading="eager"
+            decoding="async"
           />
         ) : (
           /* SVG Vector Fallback Odibot Mascot */

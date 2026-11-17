@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { CommandType, Direction, LevelDefinition, RobotSkinId, TileData } from '../types/game';
-import { ROBOT_SKINS } from './SkinSelectorModal';
+import { ROBOT_SKINS } from '../data/skins';
 import { OdibotMascot } from './OdibotMascot';
 import { sounds } from '../utils/audio';
 import {
@@ -26,7 +26,28 @@ interface Particle {
   alpha: number;
   life: number;
   maxLife: number;
+  gravity?: number;
+  drag?: number;
   shape?: 'star' | 'circle' | 'spark';
+}
+
+interface FireworkRocket {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  targetY: number;
+  color: string;
+  secondaryColor: string;
+}
+
+interface FireworkRing {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  color: string;
+  alpha: number;
 }
 
 interface RobotVisualState {
@@ -57,6 +78,7 @@ interface IsometricCanvasProps {
   isSimulating: boolean;
   activeAction?: string;
   onTileClick?: (x: number, y: number) => void;
+  isVictory?: boolean;
   celebratingVictory?: boolean;
   onManualAction?: (action: CommandType) => void;
   skinId?: RobotSkinId;
@@ -101,12 +123,14 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
   robotState,
   isSimulating,
   activeAction,
+  isVictory = false,
   celebratingVictory = false,
   onManualAction,
   skinId = 'CYAN',
   autoRunCountdown = null,
   autoRunEnabled = false,
 }) => {
+  const victoryActive = Boolean(isVictory || celebratingVictory);
   const activeSkin = ROBOT_SKINS.find((s) => s.id === skinId) || ROBOT_SKINS[0];
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -148,6 +172,10 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
   });
 
   const particlesRef = useRef<Particle[]>([]);
+  const fireworkRocketsRef = useRef<FireworkRocket[]>([]);
+  const fireworkRingsRef = useRef<FireworkRing[]>([]);
+  const fireworkTimerRef = useRef<number>(0);
+  const victoryElapsedRef = useRef<number>(0);
   const animTimeRef = useRef<number>(0);
   const prevRobotStateRef = useRef(robotState);
 
@@ -165,7 +193,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     }
   }, [robotState, activeAction]);
 
-  // Spawn particles
+  // Spawn particles (in screen space)
   const spawnParticles = useCallback((
     screenX: number,
     screenY: number,
@@ -174,22 +202,59 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     shape: 'star' | 'circle' | 'spark' = 'circle'
   ) => {
     for (let i = 0; i < count; i++) {
+      if (particlesRef.current.length >= 280) break;
       const angle = Math.random() * Math.PI * 2;
-      const speed = 1.2 + Math.random() * 3.5;
+      const speed = shape === 'spark' ? 2.2 + Math.random() * 4.5 : 1.4 + Math.random() * 3.8;
       particlesRef.current.push({
         x: screenX,
         y: screenY,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 1.5,
+        vy: Math.sin(angle) * speed - (shape === 'spark' ? 0.6 : 1.4),
         color: colors[Math.floor(Math.random() * colors.length)],
-        size: shape === 'star' ? 4 + Math.random() * 4 : 2 + Math.random() * 3,
+        size: shape === 'star' ? 4 + Math.random() * 3.5 : shape === 'spark' ? 2 + Math.random() * 2 : 2.5 + Math.random() * 2.5,
         alpha: 1,
         life: 0,
-        maxLife: 25 + Math.random() * 25,
+        maxLife: shape === 'spark' ? 36 + Math.random() * 24 : 32 + Math.random() * 24,
+        gravity: shape === 'spark' ? 0.065 : 0.08,
+        drag: shape === 'spark' ? 0.975 : 0.985,
         shape,
       });
     }
   }, []);
+
+  const spawnFireworkBurst = useCallback((cx: number, cy: number, primary: string, secondary: string) => {
+    const palette = [primary, secondary, '#FFFFFF', '#FDE68A'];
+    fireworkRingsRef.current.push({
+      x: cx,
+      y: cy,
+      radius: 4,
+      maxRadius: 42 + Math.random() * 26,
+      color: primary,
+      alpha: 0.9,
+    });
+
+    const rays = 24;
+    for (let i = 0; i < rays; i++) {
+      if (particlesRef.current.length >= 280) break;
+      const angle = (i / rays) * Math.PI * 2 + (Math.random() - 0.5) * 0.14;
+      const speed = 2.6 + Math.random() * 2.8;
+      particlesRef.current.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: i % 3 === 0 ? secondary : primary,
+        size: 2.5 + Math.random() * 2,
+        alpha: 1,
+        life: 0,
+        maxLife: 38 + Math.random() * 20,
+        gravity: 0.06,
+        drag: 0.97,
+        shape: 'spark',
+      });
+    }
+    spawnParticles(cx, cy, 10, palette, 'star');
+  }, [spawnParticles]);
 
   // Watch for state changes and trigger smooth animation
   useEffect(() => {
@@ -253,29 +318,95 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     }
   }, [robotState, activeAction]);
 
-  // Victory celebration confetti trigger
+  // Victory celebration fireworks & jump trigger
   useEffect(() => {
-    if (celebratingVictory && canvasRef.current) {
-      const width = canvasRef.current.width / (window.devicePixelRatio || 1);
-      const height = canvasRef.current.height / (window.devicePixelRatio || 1);
-      const colors = ['#06B6D4', '#F59E0B', '#10B981', '#EC4899', '#8B5CF6', '#38BDF8'];
-      for (let i = 0; i < 90; i++) {
-        spawnParticles(
-          width / 2 + (Math.random() - 0.5) * 350,
-          height / 2 + (Math.random() - 0.5) * 200,
-          1,
-          colors,
-          'star'
-        );
+    if (victoryActive) {
+      victoryElapsedRef.current = 0;
+      fireworkTimerRef.current = 0.25;
+      const { width, height } = canvasSizeRef.current;
+      const w = width || (canvasRef.current ? canvasRef.current.width / (window.devicePixelRatio || 1) : 480);
+      const h = height || (canvasRef.current ? canvasRef.current.height / (window.devicePixelRatio || 1) : 360);
+      if (w > 0 && h > 0) {
+        spawnFireworkBurst(w * 0.28, h * 0.30, '#F59E0B', '#FDE68A');
+        spawnFireworkBurst(w * 0.72, h * 0.26, '#06B6D4', '#A5F3FC');
+        spawnFireworkBurst(w * 0.50, h * 0.22, '#EC4899', '#C084FC');
       }
+    } else {
+      victoryElapsedRef.current = 0;
+      fireworkRocketsRef.current = [];
+      fireworkRingsRef.current = [];
     }
-  }, [celebratingVictory, spawnParticles]);
+  }, [victoryActive, spawnFireworkBurst]);
 
-  // Main 60 FPS Game Render Loop
+  const canvasSizeRef = useRef({ width: 0, height: 0, dpr: 1 });
+  const renderStateRef = useRef({
+    level,
+    tiles,
+    isSimulating,
+    victoryActive,
+    zoom,
+    pan,
+    rotationAngle,
+    perspectiveMode,
+    activeSkin,
+  });
+  renderStateRef.current = {
+    level,
+    tiles,
+    isSimulating,
+    victoryActive,
+    zoom,
+    pan,
+    rotationAngle,
+    perspectiveMode,
+    activeSkin,
+  };
+
+  // Measure canvas container ONLY on actual resize (zero layout thrashing inside rAF!)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const updateSize = (w?: number, h?: number) => {
+      const width = w ?? container.clientWidth;
+      const height = h ?? container.clientHeight;
+      if (width <= 0 || height <= 0) return;
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const displayWidth = Math.floor(width * dpr);
+      const displayHeight = Math.floor(height * dpr);
+
+      if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+      }
+      canvasSizeRef.current = { width, height, dpr };
+    };
+
+    updateSize();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          updateSize(width, height);
+        }
+      });
+      observer.observe(container);
+      return () => observer.disconnect();
+    }
+
+    const onResize = () => updateSize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Main 60 FPS Game Render Loop (single mount lifecycle — never restarts on state updates)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
     let animationFrameId: number;
@@ -287,53 +418,60 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
       const dt = Math.min(rawDt, 0.05); // Clamp dt for 60fps simulation
       animTimeRef.current += dt;
 
-      // Resize canvas to match display size with DPR
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      const displayWidth = Math.floor(rect.width * dpr);
-      const displayHeight = Math.floor(rect.height * dpr);
-
-      if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
-        canvas.width = displayWidth;
-        canvas.height = displayHeight;
-      }
-
-      ctx.save();
-      ctx.scale(dpr, dpr);
-
-      const width = rect.width;
-      const height = rect.height;
-
-      if (width <= 0 || height <= 0 || displayWidth <= 0 || displayHeight <= 0) {
-        ctx.restore();
+      const { width, height, dpr } = canvasSizeRef.current;
+      if (width <= 0 || height <= 0 || canvas.width <= 0 || canvas.height <= 0) {
         animationFrameId = requestAnimationFrame(render);
         return;
       }
+
+      const {
+        level: curLevel,
+        tiles: curTiles,
+        isSimulating: curSimulating,
+        victoryActive: curVictory,
+        zoom: curZoom,
+        pan: curPan,
+        rotationAngle: curRotAngle,
+        perspectiveMode: curPerspective,
+        activeSkin: curSkin,
+      } = renderStateRef.current;
+
+      if (curVictory) {
+        victoryElapsedRef.current += dt;
+      }
+
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // 1. Draw Deep Space Background
       ctx.fillStyle = '#080C16';
       ctx.fillRect(0, 0, width, height);
 
       // Starry dust particles in background
-      ctx.save();
       ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 36; i++) {
         const sx = (i * 123.45 + animTimeRef.current * 4) % width;
         const sy = (i * 267.89) % height;
         const size = i % 3 === 0 ? 1.5 : 1;
         ctx.fillRect(sx, sy, size, size);
       }
-      ctx.restore();
 
-      // Dynamic auto-fit zoom based on level grid dimensions
-      const gridSpanX = (level.gridWidth + level.gridHeight) * 34;
-      const gridSpanY = (level.gridWidth + level.gridHeight) * 17 + 70;
-      const autoFit = Math.min(1.0, (width - 48) / gridSpanX, (height - 48) / gridSpanY);
-      const effectiveZoom = zoom * Math.max(0.52, autoFit);
+      // Dynamic auto-fit zoom based on level grid dimensions (responsive for mobile & desktop)
+      const gridSpanX =
+        curPerspective === 'TOP_DOWN'
+          ? curLevel.gridWidth * 58
+          : (curLevel.gridWidth + curLevel.gridHeight) * 34;
+      const gridSpanY =
+        curPerspective === 'TOP_DOWN'
+          ? curLevel.gridHeight * 58
+          : (curLevel.gridWidth + curLevel.gridHeight) * 17 + 72;
+      const pad = width < 480 ? 28 : 48;
+      const autoFit = Math.min(1.0, (width - pad) / gridSpanX, (height - pad) / gridSpanY);
+      const effectiveZoom = curZoom * Math.max(0.42, autoFit);
 
       // Camera view center (centered with slight upward bias so lower destination tiles are never hidden)
-      const centerX = width / 2 + pan.x;
-      const centerY = height / 2 + pan.y - (perspectiveMode === 'ISO' ? 12 : 0);
+      const centerX = width / 2 + curPan.x;
+      const centerY = height / 2 + curPan.y - (curPerspective === 'ISO' ? 12 : 0);
 
       ctx.save();
       ctx.translate(centerX, centerY);
@@ -345,30 +483,24 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
       const heightScale = 22;
       const topDownTileSize = 58;
 
+      const rad = (curRotAngle * Math.PI) / 180;
+      const rotCos = Math.round(Math.cos(rad));
+      const rotSin = Math.round(Math.sin(rad));
+      const midX = (curLevel.gridWidth - 1) / 2;
+      const midY = (curLevel.gridHeight - 1) / 2;
+
       // Projection mapping: ISO vs TOP_DOWN
       const toScreen = (gx: number, gy: number, gh: number) => {
-        if (perspectiveMode === 'TOP_DOWN') {
-          const midX = (level.gridWidth - 1) / 2;
-          const midY = (level.gridHeight - 1) / 2;
+        if (curPerspective === 'TOP_DOWN') {
           const screenX = (gx - midX) * topDownTileSize;
           const screenY = (gy - midY) * topDownTileSize;
           return { x: screenX, y: screenY, depth: gy * 10 + gx + gh * 0.1 };
         }
 
-        // Isometric projection with camera rotation
-        let rx = gx;
-        let ry = gy;
-        const rad = (rotationAngle * Math.PI) / 180;
-        const cos = Math.round(Math.cos(rad));
-        const sin = Math.round(Math.sin(rad));
-
-        const midX = (level.gridWidth - 1) / 2;
-        const midY = (level.gridHeight - 1) / 2;
         const ox = gx - midX;
         const oy = gy - midY;
-
-        rx = ox * cos - oy * sin + midX;
-        ry = ox * sin + oy * cos + midY;
+        const rx = ox * rotCos - oy * rotSin + midX;
+        const ry = ox * rotSin + oy * rotCos + midY;
 
         const screenX = (rx - ry) * (tileW / 2);
         const screenY = (rx + ry) * (tileH / 2) - gh * heightScale;
@@ -388,9 +520,9 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
       const items: RenderItem[] = [];
 
       // Add tiles
-      for (let y = 0; y < level.gridHeight; y++) {
-        for (let x = 0; x < level.gridWidth; x++) {
-          const t = tiles[y]?.[x];
+      for (let y = 0; y < curLevel.gridHeight; y++) {
+        for (let x = 0; x < curLevel.gridWidth; x++) {
+          const t = curTiles[y]?.[x];
           if (!t || t.type === 'EMPTY') continue;
           const screen = toScreen(x, y, t.height);
           items.push({
@@ -418,7 +550,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
       // Update robot visual state lerp
       const r = visualRobotRef.current;
       if (r.animProgress < 1) {
-        const animSpeed = isSimulating ? 5.5 : 7.0;
+        const animSpeed = curSimulating ? 5.5 : 7.0;
         r.animProgress = Math.min(1, r.animProgress + dt * animSpeed);
 
         const t = r.animProgress;
@@ -470,17 +602,15 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
 
       // Draw footprint dots on visited tiles
       if (visitedTilesRef.current.length > 0) {
-        ctx.save();
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.45)';
         visitedTilesRef.current.forEach((pos) => {
-          const tile = tiles[pos.y]?.[pos.x];
+          const tile = curTiles[pos.y]?.[pos.x];
           const h = tile ? tile.height : 0;
           const posScreen = toScreen(pos.x, pos.y, h);
           ctx.beginPath();
-          ctx.arc(posScreen.x, posScreen.y, perspectiveMode === 'TOP_DOWN' ? 4 : 3, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(6, 182, 212, 0.45)';
+          ctx.arc(posScreen.x, posScreen.y, curPerspective === 'TOP_DOWN' ? 4 : 3, 0, Math.PI * 2);
           ctx.fill();
         });
-        ctx.restore();
       }
 
       // Helper to draw tile
@@ -492,7 +622,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         gx: number,
         gy: number
       ) => {
-        if (perspectiveMode === 'TOP_DOWN') {
+        if (curPerspective === 'TOP_DOWN') {
           // --- 2D Top-Down Clean Grid Tile ---
           const size = topDownTileSize - 4;
           const half = size / 2;
@@ -668,51 +798,75 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         }
       };
 
-      // Helper to draw sparkling crystal
+      // Helper to draw sparkling crystal (zero gradient allocation per frame)
       const drawCrystal = (screenX: number, screenY: number) => {
         const floatY = Math.sin(animTimeRef.current * 3.5) * 4;
         const cy = screenY - 14 + floatY;
 
-        ctx.save();
         ctx.beginPath();
         ctx.ellipse(screenX, screenY - 2, 7, 3.5, 0, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
         ctx.fill();
 
+        // Full diamond body
         ctx.beginPath();
         ctx.moveTo(screenX, cy - 9);
         ctx.lineTo(screenX + 7, cy);
         ctx.lineTo(screenX, cy + 9);
         ctx.lineTo(screenX - 7, cy);
         ctx.closePath();
-
-        const grad = ctx.createLinearGradient(screenX - 7, cy - 9, screenX + 7, cy + 9);
-        grad.addColorStop(0, '#67E8F9');
-        grad.addColorStop(0.5, '#06B6D4');
-        grad.addColorStop(1, '#0891B2');
-        ctx.fillStyle = grad;
+        ctx.fillStyle = '#06B6D4';
         ctx.fill();
         ctx.strokeStyle = '#E0F2FE';
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
+        // Top sunlit facet
+        ctx.beginPath();
+        ctx.moveTo(screenX, cy - 9);
+        ctx.lineTo(screenX + 7, cy);
+        ctx.lineTo(screenX, cy);
+        ctx.lineTo(screenX - 7, cy);
+        ctx.closePath();
+        ctx.fillStyle = '#67E8F9';
+        ctx.fill();
+
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
         ctx.arc(screenX - 2, cy - 3, 1.5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
       };
 
       // Helper to draw Kodi robot
       const drawRobot = (screenX: number, screenY: number) => {
         const angle = r.currentAngle;
 
+        // Victory Jump & Cheer Kinematics
+        const vPhase = curVictory ? (victoryElapsedRef.current * 2.4) % 1 : 0;
+        const vJumpCurve = curVictory ? Math.sin(vPhase * Math.PI) : 0;
+        const victoryHopHeight = curVictory ? vJumpCurve * 24 : 0;
+        const victoryScaleY = curVictory ? (vJumpCurve < 0.12 ? 0.88 : 1 + vJumpCurve * 0.12) : 1;
+        const victoryScaleX = curVictory ? (vJumpCurve < 0.12 ? 1.12 : 1 - vJumpCurve * 0.06) : 1;
+        const victoryWobble = curVictory ? Math.sin(victoryElapsedRef.current * 6.5) * 0.12 : 0;
+
         ctx.save();
         ctx.translate(screenX, screenY - r.jumpArc);
 
-        if (perspectiveMode === 'TOP_DOWN') {
+        if (curPerspective === 'TOP_DOWN') {
           // --- 2D Top-Down Kodi Rover ---
-          ctx.rotate(angle);
+          // Pulsing golden victory aura under robot
+          if (curVictory) {
+            const auraRadius = 18 + Math.sin(victoryElapsedRef.current * 8) * 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, auraRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+          }
+
+          const topScale = curVictory ? 1 + vJumpCurve * 0.22 : 1;
+          ctx.scale(topScale, topScale);
+          ctx.rotate(angle + victoryWobble);
 
           // Headlight beam
           ctx.beginPath();
@@ -720,15 +874,15 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           ctx.lineTo(28, -12);
           ctx.lineTo(28, 12);
           ctx.closePath();
-          ctx.fillStyle = 'rgba(34, 211, 238, 0.2)';
+          ctx.fillStyle = curVictory ? 'rgba(251, 191, 36, 0.32)' : 'rgba(34, 211, 238, 0.2)';
           ctx.fill();
 
           // Body chassis
           ctx.beginPath();
           ctx.arc(0, 0, 14, 0, Math.PI * 2);
-          ctx.fillStyle = activeSkin.primaryColor;
+          ctx.fillStyle = curSkin.primaryColor;
           ctx.fill();
-          ctx.strokeStyle = activeSkin.visorColor;
+          ctx.strokeStyle = curVictory ? '#FDE68A' : curSkin.visorColor;
           ctx.lineWidth = 2;
           ctx.stroke();
 
@@ -739,7 +893,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           ctx.fill();
 
           // Glowing Eyes
-          ctx.fillStyle = activeSkin.visorColor;
+          ctx.fillStyle = curVictory ? '#FBBF24' : curSkin.visorColor;
           ctx.beginPath();
           ctx.arc(6, -3, 2, 0, Math.PI * 2);
           ctx.arc(6, 3, 2, 0, Math.PI * 2);
@@ -759,19 +913,47 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         }
 
         // --- 3D Isometric Odibot Robot ---
-        // Shadow
+        // Pulsing victory spotlight ring on tile surface
+        if (curVictory) {
+          const ringPulse = (Math.sin(victoryElapsedRef.current * 7) + 1) * 0.5;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 16 + ringPulse * 6, 8 + ringPulse * 3, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(251, 191, 36, ${0.45 + ringPulse * 0.45})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // Shadow (shrinks nicely as robot jumps high)
+        const shadowShrink = Math.max(0.5, 1 - victoryHopHeight / 48);
         ctx.beginPath();
-        ctx.ellipse(0, 0, 11, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 11 * shadowShrink, 5 * shadowShrink, 0, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
         ctx.fill();
 
-        const idleBob = Math.sin(animTimeRef.current * 4) * 1.5;
-        ctx.translate(0, idleBob);
+        const idleBob = curVictory ? 0 : Math.sin(animTimeRef.current * 4) * 1.5;
+        ctx.translate(0, idleBob - victoryHopHeight);
+        ctx.scale(victoryScaleX, victoryScaleY);
+        if (curVictory) {
+          ctx.rotate(victoryWobble * 0.5);
+        }
 
         const bodyW = 24;
         const bodyH = 22;
 
-        // Jetpack
+        // Jetpack (glowing thruster flames during victory jump!)
+        if (curVictory && vJumpCurve > 0.15) {
+          const flameLen = 5 + Math.random() * 6;
+          ctx.fillStyle = '#F59E0B';
+          ctx.beginPath();
+          ctx.moveTo(-bodyW / 2 - 4, -bodyH + 16);
+          ctx.lineTo(-bodyW / 2 - 2, -bodyH + 16 + flameLen);
+          ctx.lineTo(-bodyW / 2, -bodyH + 16);
+          ctx.moveTo(bodyW / 2, -bodyH + 16);
+          ctx.lineTo(bodyW / 2 + 2, -bodyH + 16 + flameLen);
+          ctx.lineTo(bodyW / 2 + 4, -bodyH + 16);
+          ctx.fill();
+        }
+
         ctx.fillStyle = '#4B5563';
         ctx.fillRect(-bodyW / 2 - 4, -bodyH + 4, 4, 12);
         ctx.fillRect(bodyW / 2, -bodyH + 4, 4, 12);
@@ -779,10 +961,10 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         // Body base
         ctx.beginPath();
         drawRoundRect(ctx, -bodyW / 2, -bodyH, bodyW, bodyH, 6);
-        ctx.fillStyle = activeSkin.primaryColor;
+        ctx.fillStyle = curSkin.primaryColor;
         ctx.fill();
-        ctx.strokeStyle = activeSkin.visorColor;
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = curVictory ? '#FDE68A' : curSkin.visorColor;
+        ctx.lineWidth = curVictory ? 2 : 1.5;
         ctx.stroke();
 
         // Chest badge
@@ -800,7 +982,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         drawRoundRect(ctx, -headW / 2, headY, headW, headH, 6);
         ctx.fillStyle = '#111827';
         ctx.fill();
-        ctx.strokeStyle = activeSkin.primaryColor;
+        ctx.strokeStyle = curVictory ? '#FBBF24' : curSkin.primaryColor;
         ctx.lineWidth = 2;
         ctx.stroke();
 
@@ -816,8 +998,18 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           }
         }
 
-        ctx.fillStyle = activeSkin.visorColor;
-        if (r.isBlinking) {
+        ctx.fillStyle = curSkin.visorColor;
+        if (curVictory) {
+          // Happy "^ ^" celebratory eyes
+          ctx.strokeStyle = '#FBBF24';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(eyeXCenter - 4, headY + 10, 3.2, Math.PI * 1.15, Math.PI * 1.85);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(eyeXCenter + 4, headY + 10, 3.2, Math.PI * 1.15, Math.PI * 1.85);
+          ctx.stroke();
+        } else if (r.isBlinking) {
           ctx.fillRect(eyeXCenter - 6, headY + 8, 4, 1.5);
           ctx.fillRect(eyeXCenter + 2, headY + 8, 4, 1.5);
         } else {
@@ -841,10 +1033,12 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        const beaconPulse = (Math.sin(animTimeRef.current * 8) + 1) * 0.5;
+        const beaconPulse = (Math.sin(animTimeRef.current * (curVictory ? 16 : 8)) + 1) * 0.5;
         ctx.beginPath();
-        ctx.arc(0, headY - 9, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(251, 191, 36, ${0.8 + beaconPulse * 0.2})`;
+        ctx.arc(0, headY - 9, curVictory ? 4.5 : 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = curVictory
+          ? `rgba(16, 185, 129, ${0.85 + beaconPulse * 0.15})`
+          : `rgba(251, 191, 36, ${0.8 + beaconPulse * 0.2})`;
         ctx.fill();
 
         // Direction pointer
@@ -863,7 +1057,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         ctx.restore();
       };
 
-      // 3. Render all sorted items
+      // 3. Render all sorted world items
       for (const item of items) {
         const screen = toScreen(item.gx, item.gy, item.gh);
         if (item.type === 'tile' && item.data) {
@@ -875,14 +1069,111 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         }
       }
 
-      // 4. Update and render particles
+      // Restore world camera transform before drawing screen-space fireworks & confetti
+      ctx.restore();
+
+      // 4. Screen-space Fireworks Launcher & Shockwave Rings during Victory
+      if (curVictory) {
+        fireworkTimerRef.current -= dt;
+        const rockets = fireworkRocketsRef.current;
+        if (fireworkTimerRef.current <= 0 && rockets.length < 5) {
+          fireworkTimerRef.current = 0.42 + Math.random() * 0.35;
+          const colorPairs: [string, string][] = [
+            ['#F59E0B', '#FDE68A'],
+            ['#06B6D4', '#A5F3FC'],
+            ['#EC4899', '#F9A8D4'],
+            ['#10B981', '#6EE7B7'],
+            ['#A855F7', '#D8B4FE'],
+          ];
+          const [primary, secondary] = colorPairs[Math.floor(Math.random() * colorPairs.length)];
+          rockets.push({
+            x: width * (0.16 + Math.random() * 0.68),
+            y: height * 0.94,
+            vx: (Math.random() - 0.5) * 1.6,
+            vy: -(6.5 + Math.random() * 3.2),
+            targetY: height * (0.18 + Math.random() * 0.34),
+            color: primary,
+            secondaryColor: secondary,
+          });
+        }
+      }
+
+      // Update & draw rising firework rockets
+      const rockets = fireworkRocketsRef.current;
+      for (let i = rockets.length - 1; i >= 0; i--) {
+        const rk = rockets[i];
+        rk.x += rk.vx;
+        rk.y += rk.vy;
+        rk.vy += 0.08;
+
+        // Rising rocket comet head
+        ctx.save();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(rk.x, rk.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = rk.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(rk.x, rk.y);
+        ctx.lineTo(rk.x - rk.vx * 3, rk.y - rk.vy * 2.5);
+        ctx.stroke();
+        ctx.restore();
+
+        // Trail spark
+        if (Math.random() < 0.6 && particlesRef.current.length < 280) {
+          particlesRef.current.push({
+            x: rk.x,
+            y: rk.y,
+            vx: (Math.random() - 0.5) * 0.8,
+            vy: 0.6 + Math.random() * 0.8,
+            color: rk.secondaryColor,
+            size: 1.8,
+            alpha: 0.9,
+            life: 0,
+            maxLife: 14,
+            gravity: 0.03,
+            drag: 0.96,
+            shape: 'circle',
+          });
+        }
+
+        if (rk.y <= rk.targetY || rk.vy >= -0.5) {
+          spawnFireworkBurst(rk.x, rk.y, rk.color, rk.secondaryColor);
+          rockets.splice(i, 1);
+        }
+      }
+
+      // Update & draw firework shockwave rings
+      const rings = fireworkRingsRef.current;
+      for (let i = rings.length - 1; i >= 0; i--) {
+        const ring = rings[i];
+        ring.radius += (ring.maxRadius - ring.radius) * 0.14;
+        ring.alpha -= 0.035;
+        if (ring.alpha <= 0.02) {
+          rings.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = ring.alpha;
+        ctx.strokeStyle = ring.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 5. Update and render screen-space firework sparks & confetti stars
       const particles = particlesRef.current;
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.life += 1;
+        p.vx *= p.drag ?? 0.985;
+        p.vy *= p.drag ?? 0.985;
+        p.vy += p.gravity ?? 0.08;
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.08;
         p.alpha = Math.max(0, 1 - p.life / p.maxLife);
 
         if (p.life >= p.maxLife) {
@@ -892,13 +1183,40 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
 
         ctx.save();
         ctx.globalAlpha = p.alpha;
-        ctx.fillStyle = p.color;
 
-        if (p.shape === 'star') {
+        if (p.shape === 'spark') {
+          ctx.strokeStyle = p.color;
+          ctx.lineWidth = Math.max(1.2, p.size * 0.65);
+          ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x - p.vx * 2.4, p.y - p.vy * 2.4);
+          ctx.stroke();
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, Math.max(1, p.size * 0.45), 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.shape === 'star') {
+          ctx.fillStyle = p.color;
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.life * 0.12);
+          ctx.beginPath();
+          const spikes = 4;
+          const outerR = p.size;
+          const innerR = p.size * 0.42;
+          for (let s = 0; s < spikes * 2; s++) {
+            const radStar = s % 2 === 0 ? outerR : innerR;
+            const angStar = (s * Math.PI) / spikes;
+            const sx = Math.cos(angStar) * radStar;
+            const sy = Math.sin(angStar) * radStar;
+            if (s === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          }
+          ctx.closePath();
           ctx.fill();
         } else {
+          ctx.fillStyle = p.color;
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
           ctx.fill();
@@ -906,7 +1224,6 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         ctx.restore();
       }
 
-      ctx.restore();
       ctx.restore();
 
       animationFrameId = requestAnimationFrame(render);
@@ -917,16 +1234,19 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [level, tiles, isSimulating, zoom, pan, rotationAngle, perspectiveMode, activeSkin]);
+  }, []);
 
-  // Mouse pan handlers (only trigger when dragging the canvas directly, never HUD buttons)
-  const handleMouseDown = (e: React.MouseEvent) => {
+  // Unified Pointer pan handlers (supports both touch drag on mobile & mouse drag on desktop)
+  const handlePointerDown = (e: React.PointerEvent) => {
     if (e.target !== canvasRef.current) return;
     isDraggingRef.current = true;
     dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDraggingRef.current) return;
     setPan({
       x: e.clientX - dragStartRef.current.x,
@@ -934,8 +1254,12 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     });
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
   };
 
   // Camera toolbar buttons
@@ -963,7 +1287,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
 
   // Dynamic speech text for Odibot
   let speechText = 'Siap melangkah, Kapten! Susun balok kode atau gerakkan langsung dengan D-Pad/Panah.';
-  if (celebratingVictory) {
+  if (victoryActive) {
     speechText = 'HORE! Misi berhasil diselesaikan dengan sukses! 🎉 Kamu pintar sekali!';
   } else if (autoRunCountdown !== null && autoRunCountdown !== undefined) {
     speechText = '⚡ Menyiapkan mesin! Robot Odibot akan melangkah otomatis dalam 1 detik...';
@@ -986,163 +1310,243 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     WEST: 'Barat (Kiri)',
   };
 
-  return (
-    <div
-      ref={containerRef}
-      className="relative w-full h-full min-h-[380px] bg-slate-950 overflow-hidden select-none cursor-grab active:cursor-grabbing border border-slate-800 rounded-xl shadow-inner"
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
-      <canvas ref={canvasRef} className="w-full h-full block" />
+  const hasSwitchInLevel =
+    level.allowedCommands.includes('TOGGLE_SWITCH') ||
+    tiles.some((row) => row.some((t) => t.type === 'SWITCH'));
 
-      {/* Floating Odibot Mascot Speech Bubble HUD */}
-      <div className="absolute top-3 left-3 right-3 sm:right-auto flex items-center gap-2.5 p-2 bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-xl backdrop-blur-md pointer-events-auto max-w-md">
-        <OdibotMascot size="sm" className="shrink-0" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
-            <span>Odibot Si Robot</span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-300 font-mono">
-              ({robotState.x}, {robotState.y}) {dirInIndonesian[robotState.dir]}
-            </span>
-          </div>
-          <div className="text-xs font-medium text-white truncate">
-            {speechText}
+  return (
+    <div className="flex flex-col w-full h-full min-h-[200px] sm:min-h-[340px] gap-1.5">
+      <div
+        ref={containerRef}
+        className="relative flex-1 w-full min-h-[180px] bg-slate-950 overflow-hidden select-none cursor-grab active:cursor-grabbing border border-slate-800 rounded-xl shadow-inner"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <canvas ref={canvasRef} className="w-full h-full block touch-none" />
+
+        {/* Floating Odibot Mascot Speech Bubble HUD (compact on mobile so grid stays clear) */}
+        <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-auto flex items-center gap-2 p-1.5 sm:p-2 bg-slate-900/95 border border-slate-700/80 rounded-xl sm:rounded-2xl shadow-lg pointer-events-auto max-w-md">
+          <OdibotMascot size="sm" className="shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-cyan-400 tracking-wide">
+              <span className="truncate">Odibot</span>
+              <span className="text-slate-600" aria-hidden="true">·</span>
+              <span className="text-slate-300 font-mono truncate tabular-nums">
+                ({robotState.x},{robotState.y}) {dirInIndonesian[robotState.dir].split(' ')[0]}
+              </span>
+            </div>
+            <div className="text-[11px] sm:text-xs font-medium text-white truncate">
+              {speechText}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Floating Camera Controls (< 15% playfield obstruction) */}
-      <div className="absolute bottom-3 left-3 flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-700/60 rounded-xl backdrop-blur-sm text-slate-300 pointer-events-auto shadow-md">
-        {/* Toggle Perspective (3D vs 2D Denah) */}
-        <button
-          onClick={() => {
-            sounds.playClick();
-            setPerspectiveMode((prev) => (prev === 'ISO' ? 'TOP_DOWN' : 'ISO'));
-          }}
-          className={`px-2 py-1 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
-            perspectiveMode === 'TOP_DOWN'
-              ? 'bg-cyan-600 text-white shadow-sm'
-              : 'text-slate-300 hover:text-white hover:bg-slate-800'
-          }`}
-          title="Ganti Sudut Pandang (3D Isometrik / 2D Denah Atas)"
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span>{perspectiveMode === 'TOP_DOWN' ? 'Denah 2D' : 'Isometrik 3D'}</span>
-        </button>
-
-        <div className="h-4 w-px bg-slate-700 mx-0.5" />
-
-        <button
-          onClick={handleZoomIn}
-          title="Perbesar Tampilan"
-          className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
-        <button
-          onClick={handleZoomOut}
-          title="Perkecil Tampilan"
-          className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </button>
-        {perspectiveMode === 'ISO' && (
+        {/* Floating Camera Controls (touch-sized buttons, never colliding on mobile) */}
+        <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 flex items-center gap-1 p-1 bg-slate-900/95 border border-slate-700/60 rounded-xl text-slate-300 pointer-events-auto shadow-md max-w-[calc(100%-16px)] overflow-x-auto no-scrollbar">
+          {/* Toggle Perspective (3D vs 2D Denah) */}
           <button
-            onClick={handleRotateCamera}
-            title="Putar Sudut Kamera (90°)"
-            className="p-1.5 hover:text-cyan-400 hover:bg-slate-800 rounded transition-colors flex items-center gap-1 text-xs font-mono"
+            onClick={() => {
+              sounds.playClick();
+              setPerspectiveMode((prev) => (prev === 'ISO' ? 'TOP_DOWN' : 'ISO'));
+            }}
+            className={`px-2 py-1 min-h-[34px] rounded-lg transition-colors flex items-center gap-1 text-[11px] sm:text-xs font-bold shrink-0 ${
+              perspectiveMode === 'TOP_DOWN'
+                ? 'bg-cyan-600 text-white shadow-sm'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Ganti Sudut Pandang (3D Isometrik / 2D Denah Atas)"
           >
-            <RotateCw className="w-4 h-4" />
-            <span>{rotationAngle}°</span>
+            <Layers className="w-3.5 h-3.5" />
+            <span>{perspectiveMode === 'TOP_DOWN' ? '2D' : '3D'}</span>
           </button>
+
+          <div className="h-4 w-px bg-slate-700 mx-0.5 shrink-0" />
+
+          <button
+            onClick={handleZoomIn}
+            title="Perbesar Tampilan"
+            className="min-h-[34px] min-w-[34px] flex items-center justify-center hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleZoomOut}
+            title="Perkecil Tampilan"
+            className="min-h-[34px] min-w-[34px] flex items-center justify-center hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          {perspectiveMode === 'ISO' && (
+            <button
+              onClick={handleRotateCamera}
+              title="Putar Sudut Kamera (90°)"
+              className="min-h-[34px] px-1.5 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-mono shrink-0"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>{rotationAngle}°</span>
+            </button>
+          )}
+          <button
+            onClick={handleResetView}
+            title="Reset Kamera"
+            className="min-h-[34px] min-w-[34px] flex items-center justify-center hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+
+          <div className="h-4 w-px bg-slate-700 mx-0.5 shrink-0" />
+
+          <button
+            onClick={() => setShowDPad(!showDPad)}
+            title="Tampilkan / Sembunyikan Kemudi Robot"
+            className={`min-h-[34px] px-2 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-semibold shrink-0 ${
+              showDPad ? 'text-amber-300 bg-amber-950/60 border border-amber-500/40' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Gamepad2 className="w-4 h-4" />
+            <span>Kemudi</span>
+          </button>
+        </div>
+
+        {/* Desktop/Tablet Floating Interactive D-Pad (sm+) */}
+        {showDPad && onManualAction && (
+          <div className="hidden sm:flex absolute bottom-3 right-3 p-2.5 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl pointer-events-auto flex-col items-center gap-1.5">
+            <div className="text-[10px] font-bold text-amber-400 tracking-wider flex items-center gap-1">
+              <Gamepad2 className="w-3.5 h-3.5" />
+              <span>KEMUDI LANGSUNG</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5 w-36">
+              <div />
+              <button
+                onClick={() => onManualAction('MOVE_FORWARD')}
+                disabled={isSimulating}
+                className="p-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl shadow-md transition-all flex flex-col items-center justify-center disabled:opacity-50"
+                title="Maju 1 Langkah (Panah Atas / W)"
+              >
+                <ArrowUp className="w-4 h-4" />
+                <span className="text-[8px] font-bold mt-0.5">Maju</span>
+              </button>
+              <button
+                onClick={() => onManualAction('JUMP')}
+                disabled={isSimulating}
+                className="p-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl shadow-md transition-all flex flex-col items-center justify-center disabled:opacity-50"
+                title="Lompat Naik/Turun Tebing (J)"
+              >
+                <ArrowUpRight className="w-4 h-4" />
+                <span className="text-[8px] font-bold mt-0.5">Lompat</span>
+              </button>
+
+              <button
+                onClick={() => onManualAction('TURN_LEFT')}
+                disabled={isSimulating}
+                className="p-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 rounded-xl border border-slate-700 shadow transition-all flex flex-col items-center justify-center disabled:opacity-50"
+                title="Putar Kiri 90° (Panah Kiri / A)"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span className="text-[8px] font-bold mt-0.5">Kiri</span>
+              </button>
+              <button
+                onClick={() => onManualAction('COLLECT')}
+                disabled={isSimulating}
+                className="p-2.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white rounded-xl shadow-md transition-all flex flex-col items-center justify-center disabled:opacity-50"
+                title="Ambil Kristal (E)"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span className="text-[8px] font-bold mt-0.5">Ambil</span>
+              </button>
+              <button
+                onClick={() => onManualAction('TURN_RIGHT')}
+                disabled={isSimulating}
+                className="p-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 rounded-xl border border-slate-700 shadow transition-all flex flex-col items-center justify-center disabled:opacity-50"
+                title="Putar Kanan 90° (Panah Kanan / D)"
+              >
+                <RotateCw className="w-4 h-4" />
+                <span className="text-[8px] font-bold mt-0.5">Kanan</span>
+              </button>
+            </div>
+
+            {hasSwitchInLevel && (
+              <button
+                onClick={() => onManualAction('TOGGLE_SWITCH')}
+                disabled={isSimulating}
+                className="w-full py-1.5 px-2 bg-amber-700/90 hover:bg-amber-600 active:scale-95 text-white rounded-xl shadow text-[10px] font-bold transition-all disabled:opacity-50"
+                title="Tekan Saklar di Ubin Ini (F)"
+              >
+                ⚡ Tekan Saklar (F)
+              </button>
+            )}
+
+            <span className="text-[9px] text-slate-400 font-mono">
+              Keyboard: Panah/WASD · J Lompat · E Ambil
+            </span>
+          </div>
         )}
-        <button
-          onClick={handleResetView}
-          title="Reset Kamera"
-          className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </button>
-
-        <div className="h-4 w-px bg-slate-700 mx-0.5" />
-
-        <button
-          onClick={() => setShowDPad(!showDPad)}
-          title="Tampilkan / Sembunyikan Kemudi Robot"
-          className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-xs ${
-            showDPad ? 'text-amber-400 bg-slate-800' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Gamepad2 className="w-4 h-4" />
-          <span className="hidden sm:inline text-[11px] font-semibold">Kemudi Manual</span>
-        </button>
       </div>
 
-      {/* Direct Interactive D-Pad / Remote Control */}
+      {/* Mobile Docked Thumb-Friendly D-Pad (< sm) — sits cleanly BELOW canvas so it NEVER covers the grid! */}
       {showDPad && onManualAction && (
-        <div className="absolute bottom-3 right-3 p-2.5 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-md pointer-events-auto flex flex-col items-center gap-1.5">
-          <div className="text-[10px] font-bold text-amber-400 tracking-wider flex items-center gap-1">
-            <Gamepad2 className="w-3.5 h-3.5" />
-            <span>KEMUDI LANGSUNG</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-1.5 w-36">
-            <div />
-            <button
-              onClick={() => onManualAction('MOVE_FORWARD')}
-              disabled={isSimulating}
-              className="p-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl shadow-md transition-all flex flex-col items-center justify-center disabled:opacity-50"
-              title="Maju 1 Langkah (Panah Atas / W)"
-            >
-              <ArrowUp className="w-4 h-4" />
-              <span className="text-[8px] font-bold mt-0.5">Maju</span>
-            </button>
-            <button
-              onClick={() => onManualAction('JUMP')}
-              disabled={isSimulating}
-              className="p-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl shadow-md transition-all flex flex-col items-center justify-center disabled:opacity-50"
-              title="Lompat Naik/Turun Tebing (J)"
-            >
-              <ArrowUpRight className="w-4 h-4" />
-              <span className="text-[8px] font-bold mt-0.5">Lompat</span>
-            </button>
-
-            {/* Middle row: Turn Left, Collect, Turn Right */}
+        <div className="sm:hidden shrink-0 p-2 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between gap-2">
+          <div className="grid grid-cols-3 gap-1.5 flex-1">
             <button
               onClick={() => onManualAction('TURN_LEFT')}
               disabled={isSimulating}
-              className="p-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 rounded-xl border border-slate-700 shadow transition-all flex flex-col items-center justify-center disabled:opacity-50"
-              title="Putar Kiri 90° (Panah Kiri / A)"
+              className="min-h-[44px] bg-slate-800 active:bg-slate-700 text-cyan-300 rounded-xl border border-slate-700 flex items-center justify-center gap-1 text-xs font-bold disabled:opacity-50"
             >
               <RotateCcw className="w-4 h-4" />
-              <span className="text-[8px] font-bold mt-0.5">Kiri</span>
+              <span>Kiri</span>
             </button>
             <button
-              onClick={() => onManualAction('COLLECT')}
+              onClick={() => onManualAction('MOVE_FORWARD')}
               disabled={isSimulating}
-              className="p-2.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white rounded-xl shadow-md transition-all flex flex-col items-center justify-center disabled:opacity-50"
-              title="Ambil Kristal (E / Space)"
+              className="min-h-[44px] bg-blue-600 active:bg-blue-500 text-white rounded-xl flex items-center justify-center gap-1 text-xs font-bold disabled:opacity-50"
             >
-              <Sparkles className="w-4 h-4" />
-              <span className="text-[8px] font-bold mt-0.5">Ambil</span>
+              <ArrowUp className="w-4 h-4" />
+              <span>Maju</span>
             </button>
             <button
               onClick={() => onManualAction('TURN_RIGHT')}
               disabled={isSimulating}
-              className="p-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 rounded-xl border border-slate-700 shadow transition-all flex flex-col items-center justify-center disabled:opacity-50"
-              title="Putar Kanan 90° (Panah Kanan / D)"
+              className="min-h-[44px] bg-slate-800 active:bg-slate-700 text-cyan-300 rounded-xl border border-slate-700 flex items-center justify-center gap-1 text-xs font-bold disabled:opacity-50"
             >
               <RotateCw className="w-4 h-4" />
-              <span className="text-[8px] font-bold mt-0.5">Kanan</span>
+              <span>Kanan</span>
             </button>
+            <button
+              onClick={() => onManualAction('JUMP')}
+              disabled={isSimulating}
+              className="min-h-[44px] bg-indigo-600 active:bg-indigo-500 text-white rounded-xl flex items-center justify-center gap-1 text-xs font-bold disabled:opacity-50"
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              <span>Lompat</span>
+            </button>
+            <button
+              onClick={() => onManualAction('COLLECT')}
+              disabled={isSimulating}
+              className="min-h-[44px] bg-amber-600 active:bg-amber-500 text-white rounded-xl flex items-center justify-center gap-1 text-xs font-bold disabled:opacity-50"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Ambil</span>
+            </button>
+            {hasSwitchInLevel ? (
+              <button
+                onClick={() => onManualAction('TOGGLE_SWITCH')}
+                disabled={isSimulating}
+                className="min-h-[44px] bg-emerald-600 active:bg-emerald-500 text-white rounded-xl flex items-center justify-center gap-1 text-xs font-bold disabled:opacity-50"
+              >
+                <span>⚡ Saklar</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowDPad(false)}
+                className="min-h-[44px] bg-slate-800 active:bg-slate-700 text-slate-400 rounded-xl border border-slate-700 text-xs font-semibold"
+              >
+                Tutup
+              </button>
+            )}
           </div>
-
-          <span className="text-[9px] text-slate-400 font-mono">
-            Bisa gunakan Keyboard: Panah / WASD
-          </span>
         </div>
       )}
     </div>

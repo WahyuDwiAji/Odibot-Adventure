@@ -104,7 +104,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 5,
+    maxBlocksFor3Stars: 6,
     allowedCommands: ['MOVE_FORWARD', 'COLLECT', 'TURN_LEFT', 'TURN_RIGHT'],
     starterBlocks: {
       main: [
@@ -131,7 +131,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     hint: 'Berjalan maju mengambil kristal pertama, belok ke kanan, ambil kristal kedua, lalu menuju titik akhir.',
     gridWidth: 5,
     gridHeight: 5,
-    initialVariables: { baterai: 7, kristal: 0 },
+    initialVariables: { baterai: 8, kristal: 0 },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [
@@ -153,7 +153,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 8,
+    maxBlocksFor3Stars: 11,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT'],
   },
   {
@@ -188,7 +188,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'COLLECT', 'IF_VAR'],
     starterBlocks: {
       main: [
@@ -216,7 +216,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     hint: 'Berjalan ke ubin saklar, aktifkan saklar, lalu lintasi gerbang laser yang telah nonaktif.',
     gridWidth: 6,
     gridHeight: 5,
-    initialVariables: { baterai: 8, saklar_aktif: 0 },
+    initialVariables: { baterai: 10, saklar_aktif: 0 },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [
@@ -240,7 +240,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 10,
+    maxBlocksFor3Stars: 15,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'TOGGLE_SWITCH', 'COLLECT'],
   },
   {
@@ -269,7 +269,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 14,
+    maxBlocksFor3Stars: 16,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'COLLECT'],
   },
   {
@@ -297,7 +297,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 9,
+    maxBlocksFor3Stars: 11,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT'],
   },
   {
@@ -315,17 +315,17 @@ export const ALL_LEVELS: LevelDefinition[] = [
     hint: 'Kunjungi saklar atas terlebih dahulu, matikan laser 1, lalu injak saklar bawah untuk membuka jalan ke terminal akhir.',
     gridWidth: 6,
     gridHeight: 5,
-    initialVariables: { baterai: 14, saklar1: 0, saklar2: 0 },
+    initialVariables: { baterai: 16, saklar1: 0, saklar2: 0 },
     tiles: [
       [
         { type: 'EMPTY', height: 0 },
         { type: 'SWITCH', height: 0, switchTargetCoords: [{ x: 3, y: 2 }] },
         { type: 'EMPTY', height: 0 },
         { type: 'EMPTY', height: 0 },
-        { type: 'SWITCH', height: 0, switchTargetCoords: [{ x: 4, y: 2 }] },
+        { type: 'EMPTY', height: 0 },
         { type: 'EMPTY', height: 0 }
       ],
-      [{ type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0 }, { type: 'EMPTY', height: 0 }],
+      [{ type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [
         { type: 'PATH', height: 0 },
         { type: 'PATH', height: 0 },
@@ -334,12 +334,12 @@ export const ALL_LEVELS: LevelDefinition[] = [
         { type: 'HAZARD', height: 0, isHazardActive: true },
         { type: 'GOAL', height: 0 }
       ],
-      [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'EMPTY', height: 0 }],
+      [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'SWITCH', height: 0, switchTargetCoords: [{ x: 4, y: 2 }] }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 16,
+    maxBlocksFor3Stars: 24,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'TOGGLE_SWITCH', 'COLLECT'],
   },
   {
@@ -367,7 +367,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 8,
+    maxBlocksFor3Stars: 12,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT'],
   },
   {
@@ -403,7 +403,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 7,
+    maxBlocksFor3Stars: 8,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'COLLECT'],
   },
   {
@@ -448,7 +448,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 12,
+    maxBlocksFor3Stars: 17,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'TOGGLE_SWITCH', 'COLLECT'],
   },
 
@@ -467,7 +467,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     conceptTitle: 'Perulangan Terhitung (Counted Loop / For)',
     conceptExplanation: 'Loop mengeksekusi blok kode berulang kali sebanyak kuantitas tertentu. Di Python 3 ditulis: "for langkah in range(2):". Menghemat kapasitas memori program hingga 70%.',
     realWorldCS: 'Penerapan: Rendering grafis 60 FPS di layar monitor dan looping pemindaian sensor lidar.',
-    hint: 'Masukkan "Maju", "Lompat", dan "Ambil Kristal" ke dalam blok "Ulangi 2 kali".',
+    hint: 'Masukkan "Maju", "Lompat", dan "Ambil Kristal" ke dalam blok "Ulangi 2 kali", lalu tambahkan "Maju" dan "Lompat" di akhir menuju portal.',
     gridWidth: 7,
     gridHeight: 5,
     initialVariables: { baterai: 10 },
@@ -488,7 +488,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 4,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'COLLECT', 'REPEAT'],
     starterBlocks: {
       main: [
@@ -502,6 +502,8 @@ export const ALL_LEVELS: LevelDefinition[] = [
             { id: 's-sub3', type: 'COLLECT' },
           ],
         },
+        { id: 's-end1', type: 'MOVE_FORWARD' },
+        { id: 's-end2', type: 'JUMP' },
       ],
     },
   },
@@ -513,14 +515,14 @@ export const ALL_LEVELS: LevelDefinition[] = [
     difficulty: 'MUDAH',
     title: 'Perulangan Bersyarat: While Baterai > 0',
     subtitle: 'Iterasi Dinamis Berdasarkan Kondisi Variabel Real-Time',
-    storyIntro: 'Odibot memiliki alokasi baterai = 5. Program Odibot dengan instruksi "Ulangi Selama (Baterai > 0)" agar terus melangkah maju mengumpulkan kristal hingga daya habis!',
+    storyIntro: 'Odibot memiliki alokasi baterai = 6. Program Odibot dengan instruksi "Ulangi Selama (Baterai > 0)" agar terus melangkah maju mengumpulkan kristal hingga mencapai terminal!',
     conceptTitle: 'Perulangan Bersyarat (While Loop Event-Driven)',
     conceptExplanation: 'While loop mengevaluasi kondisi logika sebelum tiap putaran. Selama ekspresi (baterai > 0) bernilai True, eksekusi berlanjut. Ini fondasi game loop pada video game modern.',
     realWorldCS: 'Penerapan: Main game loop di Unity / Unreal (while gameRunning: updatePhysics(); renderGraphics()).',
     hint: 'Gunakan blok "Ulangi Selama (baterai > 0)" lalu masukkan perintah Maju dan Ambil Kristal.',
     gridWidth: 7,
     gridHeight: 3,
-    initialVariables: { baterai: 5 },
+    initialVariables: { baterai: 6 },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [
@@ -536,7 +538,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 3,
+    maxBlocksFor3Stars: 4,
     allowedCommands: ['MOVE_FORWARD', 'COLLECT', 'WHILE_VAR', 'REPEAT'],
     starterBlocks: {
       main: [
@@ -579,7 +581,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'NORTH',
-    maxBlocksFor3Stars: 5,
+    maxBlocksFor3Stars: 6,
     allowedCommands: ['MOVE_FORWARD', 'TURN_RIGHT', 'COLLECT', 'REPEAT'],
   },
   {
@@ -592,9 +594,9 @@ export const ALL_LEVELS: LevelDefinition[] = [
     subtitle: 'Iterasi Multi-Arah Belokan Bergantian',
     storyIntro: 'Koridor kristal berbentuk zigzag 3 tingkat. Temukan unit terkecil (atomic kernel) dari belokan kiri-kanan lalu ulangi secara otomatis.',
     conceptTitle: 'Dekomposisi Masalah Multi-Dimensi',
-    conceptExplanation: 'Pecah rute berliku menjadi unit terkecil berulang: [Maju, Belok Kiri, Maju, Belok Kanan, Ambil Kristal]. Jalankan dalam 1 blok perulangan.',
+    conceptExplanation: 'Pecah rute berliku menjadi unit terkecil berulang: [Maju, Belok Kanan, Maju, Ambil Kristal, Belok Kiri]. Jalankan dalam 1 blok perulangan lalu Maju 2x ke portal.',
     realWorldCS: 'Penerapan: Kompresi data gambar JPEG dan pencarian biner (Binary Search).',
-    hint: 'Pola: Maju, Belok Kiri, Maju, Belok Kanan, Ambil Kristal. Ulangi 3 kali.',
+    hint: 'Pola: Maju, Belok Kanan, Maju, Ambil Kristal, Belok Kiri (Ulangi 3 kali), lalu Maju 2x ke portal.',
     gridWidth: 6,
     gridHeight: 6,
     initialVariables: { baterai: 12 },
@@ -608,7 +610,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 0 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 10,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT', 'REPEAT'],
   },
   {
@@ -623,7 +625,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     conceptTitle: 'Perulangan Kinematika 3D',
     conceptExplanation: 'Loop mengendalikan koordinat bidang horizontal (X, Y) sekaligus kenaikan elevasi vertikal (sumbu Z). Menunjukkan kekuatan abstraksi loop dalam simulasi fisika 3D.',
     realWorldCS: 'Penerapan: Algoritma pendakian multi-sumbu pada mesin printer 3D dan crane otomatis.',
-    hint: 'Bungkus perintah: Ambil Kristal, Lompat, Belok Kanan ke dalam Ulangi 4 kali.',
+    hint: 'Bungkus perintah: Ambil Kristal, Lompat, Belok Kanan ke dalam Ulangi 3 kali.',
     gridWidth: 5,
     gridHeight: 5,
     initialVariables: { baterai: 10 },
@@ -636,7 +638,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 1, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 4,
+    maxBlocksFor3Stars: 5,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'TURN_RIGHT', 'COLLECT', 'REPEAT'],
   },
   {
@@ -651,7 +653,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     conceptTitle: 'Pola Tangga Teratur (Staircase Pattern)',
     conceptExplanation: 'Pola tangga adalah contoh klasik pengenalan pola dalam pemrograman; satu siklus tangga mencakup lompatan dan langkah datar.',
     realWorldCS: 'Penerapan: Prosedural level generation pada game platformer.',
-    hint: 'Bungkus Lompat, Maju, Ambil Kristal ke dalam blok Ulangi 3 kali.',
+    hint: 'Bungkus Lompat, Ambil Kristal, Maju ke dalam blok Ulangi 2 kali, lalu tambahkan Maju ke portal.',
     gridWidth: 6,
     gridHeight: 5,
     initialVariables: { baterai: 10 },
@@ -671,7 +673,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 4,
+    maxBlocksFor3Stars: 6,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'COLLECT', 'REPEAT'],
   },
   {
@@ -699,7 +701,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 0 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 7,
+    maxBlocksFor3Stars: 14,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT', 'REPEAT'],
   },
   {
@@ -710,11 +712,11 @@ export const ALL_LEVELS: LevelDefinition[] = [
     difficulty: 'SULIT',
     title: 'Iterasi Berlapis Saklar Berulang',
     subtitle: 'Eksekusi Siklus Saklar & Pintu Laser Otomatis',
-    storyIntro: 'Tiga gerbang laser berurutan dapat dipadamkan jika Odibot menginjak saklar di setiap modul secara ritmik.',
+    storyIntro: 'Dua gerbang laser berurutan dapat dipadamkan jika Odibot menginjak dan mengaktifkan saklar di setiap modul secara ritmik.',
     conceptTitle: 'Sinkronisasi Siklus & Perubahan State',
     conceptExplanation: 'Sistem komputasi industri sering kali mengulang siklus sensor -> aksi -> verifikasi berulang kali.',
     realWorldCS: 'Penerapan: Kontrol jalur perakitan robotik di pabrik mobil.',
-    hint: 'Pola: Maju, Aktifkan Saklar, Maju, Ambil Kristal. Ulangi 2 kali.',
+    hint: 'Pola: Maju, Aktifkan Saklar, Maju 2x, Ambil Kristal. Ulangi 2 kali.',
     gridWidth: 7,
     gridHeight: 3,
     initialVariables: { baterai: 12 },
@@ -723,17 +725,17 @@ export const ALL_LEVELS: LevelDefinition[] = [
       [
         { type: 'PATH', height: 0 },
         { type: 'SWITCH', height: 0, switchTargetCoords: [{ x: 2, y: 1 }] },
-        { type: 'HAZARD', height: 0, isHazardActive: false },
+        { type: 'HAZARD', height: 0, isHazardActive: true },
         { type: 'PATH', height: 0, hasCrystal: true },
         { type: 'SWITCH', height: 0, switchTargetCoords: [{ x: 5, y: 1 }] },
-        { type: 'HAZARD', height: 0, isHazardActive: false },
+        { type: 'HAZARD', height: 0, isHazardActive: true },
         { type: 'GOAL', height: 0 }
       ],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 4,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'TOGGLE_SWITCH', 'COLLECT', 'REPEAT'],
   },
   {
@@ -751,7 +753,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     hint: 'Gunakan loop untuk menyusuri dinding luar, lalu masuk ke putaran spiral bagian dalam.',
     gridWidth: 5,
     gridHeight: 5,
-    initialVariables: { baterai: 16 },
+    initialVariables: { baterai: 20 },
     tiles: [
       [{ type: 'PATH', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0 }],
@@ -761,7 +763,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 0 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 9,
+    maxBlocksFor3Stars: 18,
     allowedCommands: ['MOVE_FORWARD', 'TURN_RIGHT', 'COLLECT', 'REPEAT'],
   },
   {
@@ -779,7 +781,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     hint: 'Rancang pola satu kolom berulang dan kombinasikan dengan belokan looping.',
     gridWidth: 6,
     gridHeight: 5,
-    initialVariables: { baterai: 20 },
+    initialVariables: { baterai: 24 },
     tiles: [
       [{ type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }],
       [{ type: 'PATH', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }],
@@ -789,7 +791,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 0 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 8,
+    maxBlocksFor3Stars: 25,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT', 'REPEAT'],
   },
 
@@ -863,7 +865,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 2,
+    maxBlocksFor3Stars: 3,
     allowedCommands: ['READ_LIST', 'MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT'],
     starterBlocks: {
       main: [
@@ -905,7 +907,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 2,
+    maxBlocksFor3Stars: 3,
     allowedCommands: ['READ_LIST', 'MOVE_FORWARD', 'JUMP', 'COLLECT'],
     starterBlocks: {
       main: [
@@ -929,9 +931,9 @@ export const ALL_LEVELS: LevelDefinition[] = [
     hint: 'Jalankan daftar rute untuk menyelesaikan misi dengan jumlah blok kode paling minimum!',
     gridWidth: 6,
     gridHeight: 5,
-    initialVariables: { baterai: 8 },
+    initialVariables: { baterai: 10 },
     initialLists: {
-      rute_orbit: ['MAJU', 'AMBIL', 'KANAN', 'MAJU', 'KIRI', 'MAJU', 'AMBIL', 'MAJU'],
+      rute_orbit: ['MAJU', 'AMBIL', 'KANAN', 'MAJU', 'KIRI', 'MAJU', 'AMBIL', 'MAJU', 'MAJU'],
     },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
@@ -966,7 +968,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     gridWidth: 6,
     gridHeight: 4,
     initialLists: {
-      antrean_fifo: ['MAJU', 'KANAN', 'MAJU', 'AMBIL', 'MAJU'],
+      antrean_fifo: ['MAJU', 'KANAN', 'MAJU', 'KIRI', 'MAJU', 'AMBIL', 'MAJU', 'MAJU'],
     },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
@@ -976,8 +978,8 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 2,
-    allowedCommands: ['READ_LIST', 'MOVE_FORWARD', 'COLLECT'],
+    maxBlocksFor3Stars: 3,
+    allowedCommands: ['READ_LIST', 'MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT'],
   },
   {
     id: 'lvl-3-6',
@@ -995,7 +997,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     gridWidth: 6,
     gridHeight: 5,
     initialLists: {
-      rute_bolak_balik: ['MAJU', 'AMBIL', 'KANAN', 'KANAN', 'MAJU', 'KANAN', 'MAJU'],
+      rute_bolak_balik: ['MAJU', 'AMBIL', 'KANAN', 'KANAN', 'MAJU', 'KIRI', 'MAJU'],
     },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
@@ -1006,8 +1008,8 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 3,
-    allowedCommands: ['READ_LIST', 'MOVE_FORWARD', 'TURN_RIGHT', 'COLLECT'],
+    maxBlocksFor3Stars: 7,
+    allowedCommands: ['READ_LIST', 'MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT'],
   },
   {
     id: 'lvl-3-7',
@@ -1036,7 +1038,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 4,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['READ_LIST', 'MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'COLLECT'],
   },
   {
@@ -1073,7 +1075,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 3,
+    maxBlocksFor3Stars: 4,
     allowedCommands: ['READ_LIST', 'MOVE_FORWARD', 'TOGGLE_SWITCH'],
   },
   {
@@ -1109,7 +1111,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 2,
+    maxBlocksFor3Stars: 3,
     allowedCommands: ['READ_LIST', 'MOVE_FORWARD'],
   },
   {
@@ -1128,7 +1130,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     gridWidth: 7,
     gridHeight: 5,
     initialLists: {
-      batch_master: ['MAJU', 'AMBIL', 'KANAN', 'MAJU', 'KIRI', 'MAJU', 'AMBIL', 'KANAN', 'MAJU', 'KIRI', 'MAJU'],
+      batch_master: ['MAJU', 'AMBIL', 'KANAN', 'MAJU', 'KIRI', 'MAJU', 'AMBIL', 'KANAN', 'MAJU', 'KIRI', 'MAJU', 'MAJU'],
     },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
@@ -1184,7 +1186,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'COLLECT', 'CALL_F1'],
     allowF1: true,
     starterBlocks: {
@@ -1216,7 +1218,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     hint: 'Buat fungsi F1 untuk maju, ambil kristal, lalu putar balik. Panggil F1 dua kali.',
     gridWidth: 5,
     gridHeight: 5,
-    initialVariables: { baterai: 14 },
+    initialVariables: { baterai: 16 },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
@@ -1226,7 +1228,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 9,
+    maxBlocksFor3Stars: 17,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT', 'CALL_F1'],
     allowF1: true,
   },
@@ -1255,7 +1257,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 10,
+    maxBlocksFor3Stars: 13,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'COLLECT', 'CALL_F1', 'CALL_F2'],
     allowF1: true,
     allowF2: true,
@@ -1292,7 +1294,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 7,
+    maxBlocksFor3Stars: 8,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'COLLECT', 'CALL_F1'],
     allowF1: true,
   },
@@ -1329,7 +1331,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 5,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'COLLECT', 'CALL_F1'],
     allowF1: true,
   },
@@ -1358,7 +1360,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 0 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 11,
     allowedCommands: ['MOVE_FORWARD', 'TURN_RIGHT', 'TURN_LEFT', 'COLLECT', 'CALL_F1'],
     allowF1: true,
   },
@@ -1401,7 +1403,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 8,
+    maxBlocksFor3Stars: 18,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'TOGGLE_SWITCH', 'COLLECT', 'CALL_F1', 'CALL_F2'],
     allowF1: true,
     allowF2: true,
@@ -1418,10 +1420,10 @@ export const ALL_LEVELS: LevelDefinition[] = [
     conceptTitle: 'Rotational Symmetry & Prosedural Modular',
     conceptExplanation: 'Pola simetri rotasi memudahkan pemrograman area luas hanya dengan merancang seperempat bagian.',
     realWorldCS: 'Penerapan: Rendering model 3D simetris pada CAD software.',
-    hint: 'Rancang F1(): Maju, Ambil Kristal, Putar Balik, Maju. Panggil F1() 4 kali.',
+    hint: 'Rancang F1(): Maju 2x, Ambil Kristal, Putar Kanan 2x, Maju 2x, Putar Kanan. Mulai dengan Putar Kanan, panggil F1() 3x, lalu Maju 2x & Ambil di portal!',
     gridWidth: 5,
     gridHeight: 5,
-    initialVariables: { baterai: 16 },
+    initialVariables: { baterai: 18 },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
@@ -1431,7 +1433,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 2, y: 2 },
     startDir: 'NORTH',
-    maxBlocksFor3Stars: 7,
+    maxBlocksFor3Stars: 18,
     allowedCommands: ['MOVE_FORWARD', 'TURN_RIGHT', 'COLLECT', 'CALL_F1'],
     allowF1: true,
   },
@@ -1460,7 +1462,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 9,
+    maxBlocksFor3Stars: 13,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'COLLECT', 'CALL_F1', 'CALL_F2'],
     allowF1: true,
     allowF2: true,
@@ -1491,7 +1493,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 9,
+    maxBlocksFor3Stars: 18,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'COLLECT', 'CALL_F1', 'CALL_F2'],
     allowF1: true,
     allowF2: true,
@@ -1531,7 +1533,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'COLLECT', 'IF_COLOR'],
     starterBlocks: {
       main: [
@@ -1568,14 +1570,14 @@ export const ALL_LEVELS: LevelDefinition[] = [
     initialVariables: { baterai: 10 },
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
-      [{ type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'ELEVATED', height: 2 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
+      [{ type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'ELEVATED', height: 2 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'GOAL', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'TURN_RIGHT', 'COLLECT', 'IF_OBSTACLE', 'REPEAT'],
   },
   {
@@ -1609,7 +1611,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 5,
+    maxBlocksFor3Stars: 6,
     allowedCommands: ['MOVE_FORWARD', 'COLLECT', 'IF_COLOR', 'REPEAT'],
   },
   {
@@ -1624,7 +1626,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     conceptTitle: 'Sistem Interlock & Transisi State Keamanan',
     conceptExplanation: 'Sistem otomasi industri menghubungkan sensor keamanan dengan gerbang relay. Bila kondisi interlock terpenuhi (saklar ON), sirkuit hazard terputus seketika.',
     realWorldCS: 'Penerapan: Sistem kendali interlock pintu kedap udara pesawat ruang angkasa.',
-    hint: 'Gunakan kondisi warna kuning untuk mengaktifkan saklar otomatis saat melangkah.',
+    hint: 'Maju, belok kiri menuju saklar untuk mematikan laser, kembali ke jalur utama, lalu lompat ambil kristal dan maju ke portal.',
     gridWidth: 6,
     gridHeight: 5,
     initialVariables: { baterai: 12 },
@@ -1644,7 +1646,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 10,
+    maxBlocksFor3Stars: 15,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'TOGGLE_SWITCH', 'COLLECT'],
   },
   {
@@ -1670,16 +1672,16 @@ export const ALL_LEVELS: LevelDefinition[] = [
         { type: 'COLOR_YELLOW', height: 0, hasCrystal: true },
         { type: 'COLOR_BLUE', height: 0 },
         { type: 'ELEVATED', height: 1 },
-        { type: 'COLOR_YELLOW', height: 0, hasCrystal: true },
-        { type: 'PATH', height: 0 },
-        { type: 'GOAL', height: 0 }
+        { type: 'COLOR_YELLOW', height: 1, hasCrystal: true },
+        { type: 'ELEVATED', height: 1 },
+        { type: 'GOAL', height: 1 }
       ],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'COLLECT', 'IF_COLOR', 'REPEAT'],
   },
   {
@@ -1699,16 +1701,16 @@ export const ALL_LEVELS: LevelDefinition[] = [
     gridHeight: 6,
     initialVariables: { baterai: 14 },
     tiles: [
-      [{ type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'ELEVATED', height: 2 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
-      [{ type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'ELEVATED', height: 2 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
-      [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'GOAL', height: 0 }, { type: 'EMPTY', height: 0 }],
+      [{ type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'ELEVATED', height: 2 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
+      [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
+      [{ type: 'GOAL', height: 0 }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
     ],
     startPos: { x: 0, y: 0 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 7,
+    maxBlocksFor3Stars: 8,
     allowedCommands: ['MOVE_FORWARD', 'TURN_RIGHT', 'COLLECT', 'IF_OBSTACLE', 'REPEAT'],
   },
   {
@@ -1742,7 +1744,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'COLLECT', 'IF_COLOR', 'IF_VAR', 'REPEAT'],
   },
   {
@@ -1777,7 +1779,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 2 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 10,
+    maxBlocksFor3Stars: 17,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'TOGGLE_SWITCH', 'COLLECT', 'IF_COLOR'],
   },
   {
@@ -1805,7 +1807,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 0 },
     startDir: 'SOUTH',
-    maxBlocksFor3Stars: 9,
+    maxBlocksFor3Stars: 15,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT', 'IF_OBSTACLE'],
   },
   {
@@ -1834,7 +1836,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 13,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'JUMP', 'COLLECT', 'REPEAT', 'CALL_F1'],
     allowF1: true,
   },
@@ -1866,7 +1868,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT'],
     isDebuggingChallenge: true,
     buggySolution: {
@@ -2004,7 +2006,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 5,
+    maxBlocksFor3Stars: 7,
     allowedCommands: ['MOVE_FORWARD', 'COLLECT', 'CALL_F1'],
     allowF1: true,
     isDebuggingChallenge: true,
@@ -2029,12 +2031,12 @@ export const ALL_LEVELS: LevelDefinition[] = [
     levelNumber: 5,
     difficulty: 'SEDANG',
     title: 'Bug Saklar Terlewat (Premature Jump)',
-    subtitle: 'Melompati Saklar Pengaman yang Mengaktifkan Laser',
-    storyIntro: 'Robot melompati ubin saklar bukannya menginjaknya, sehingga laser pengaman tetap aktif dan menyengat Odibot!',
+    subtitle: 'Melewati Saklar Pengaman Tanpa Mengaktifkannya',
+    storyIntro: 'Robot melewati ubin saklar tanpa menekan tombolnya, sehingga laser pengaman tetap aktif dan menyengat Odibot!',
     conceptTitle: 'Defect State Transition (Missing Trigger)',
     conceptExplanation: 'Melewatkan langkah pemicu (trigger) menyebabkan sistem gagal mengubah status dan memicu kegagalan proteksi.',
     realWorldCS: 'Penerapan: Validasi penutupan katup reaktor nuklir sebelum pemanasan reaktor.',
-    hint: 'Gunakan perintah Maju bukan Lompat di atas saklar, lalu aktifkan saklar.',
+    hint: 'Sisipkan balok "Nyalakan Saklar" tepat setelah Maju pertama, lalu lanjutkan Maju ke portal.',
     gridWidth: 6,
     gridHeight: 5,
     tiles: [
@@ -2053,7 +2055,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 6,
+    maxBlocksFor3Stars: 8,
     allowedCommands: ['MOVE_FORWARD', 'TOGGLE_SWITCH', 'COLLECT'],
     isDebuggingChallenge: true,
     buggySolution: {
@@ -2079,7 +2081,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     conceptTitle: 'Rotational Orientation Defect',
     conceptExplanation: 'Kesalahan pemilihan arah rotasi adalah salah satu bug koordinat spasial paling umum pada simulasi 3D.',
     realWorldCS: 'Penerapan: Koreksi sudut kemudi kemudi kapal kargo otomatis.',
-    hint: 'Periksa balok belokan di belokan kedua: ganti Putar Kanan menjadi Putar Kiri.',
+    hint: 'Ganti Putar Kiri menjadi Putar Kanan, lalu tambahkan Ambil Kristal dan Maju menuju portal tujuan.',
     gridWidth: 5,
     gridHeight: 5,
     tiles: [
@@ -2091,7 +2093,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 0 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 7,
+    maxBlocksFor3Stars: 10,
     allowedCommands: ['MOVE_FORWARD', 'TURN_LEFT', 'TURN_RIGHT', 'COLLECT'],
     isDebuggingChallenge: true,
     buggySolution: {
@@ -2125,14 +2127,14 @@ export const ALL_LEVELS: LevelDefinition[] = [
     tiles: [
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'PATH', height: 0 }, { type: 'ELEVATED', height: 1, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
-      [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'GOAL', height: 0 }],
+      [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'PATH', height: 0, hasCrystal: true }, { type: 'PATH', height: 0 }, { type: 'PATH', height: 0 }, { type: 'GOAL', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 5,
-    allowedCommands: ['MOVE_FORWARD', 'CALL_F1', 'CALL_F2'],
+    maxBlocksFor3Stars: 13,
+    allowedCommands: ['MOVE_FORWARD', 'COLLECT', 'CALL_F1', 'CALL_F2'],
     allowF1: true,
     allowF2: true,
     isDebuggingChallenge: true,
@@ -2140,6 +2142,9 @@ export const ALL_LEVELS: LevelDefinition[] = [
       main: [
         { id: 'm1', type: 'CALL_F2' }, // THE BUG! F2 called before F1!
         { id: 'm2', type: 'CALL_F1' },
+        { id: 'm3', type: 'MOVE_FORWARD' },
+        { id: 'm4', type: 'MOVE_FORWARD' },
+        { id: 'm5', type: 'MOVE_FORWARD' },
       ],
       f1: [
         { id: 'f1-1', type: 'JUMP' },
@@ -2149,7 +2154,8 @@ export const ALL_LEVELS: LevelDefinition[] = [
       f2: [
         { id: 'f2-1', type: 'TURN_RIGHT' },
         { id: 'f2-2', type: 'MOVE_FORWARD' },
-        { id: 'f2-3', type: 'TURN_LEFT' },
+        { id: 'f2-3', type: 'COLLECT' },
+        { id: 'f2-4', type: 'TURN_LEFT' },
       ],
     },
     debugExplanation: 'Program memanggil F2 sebelum menyelesaikan tebing F1! Tukar urutan agar F1() dijalankan lebih dulu sebelum F2().',
@@ -2183,7 +2189,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 5,
+    maxBlocksFor3Stars: 6,
     allowedCommands: ['MOVE_FORWARD', 'COLLECT', 'JUMP', 'IF_COLOR', 'REPEAT'],
     isDebuggingChallenge: true,
     buggySolution: {
@@ -2287,7 +2293,7 @@ export const ALL_LEVELS: LevelDefinition[] = [
     ],
     startPos: { x: 0, y: 1 },
     startDir: 'EAST',
-    maxBlocksFor3Stars: 8,
+    maxBlocksFor3Stars: 9,
     allowedCommands: ['MOVE_FORWARD', 'JUMP', 'TOGGLE_SWITCH', 'COLLECT'],
     isDebuggingChallenge: true,
     buggySolution: {
@@ -2301,6 +2307,6 @@ export const ALL_LEVELS: LevelDefinition[] = [
         { id: 'b7', type: 'MOVE_FORWARD' },
       ],
     },
-    debugExplanation: 'Odibot mencoba melangkah biasa ke atas tebing setinggi 1 meter sehingga menabrak! Ganti balok Maju ke-3 dengan balok Lompat.',
+    debugExplanation: 'Odibot mencoba melangkah biasa ke atas tebing setinggi 1 meter sehingga menabrak! Ganti balok Maju ke-3 dengan balok Lompat, lalu tambahkan 1 balok Maju di akhir.',
   },
 ];

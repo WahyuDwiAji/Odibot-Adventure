@@ -87,7 +87,7 @@ export function runSimulation(
     if (!targetTile || targetTile.type === 'EMPTY') {
       return true;
     }
-    if (targetTile.height > currentHeight) {
+    if (targetTile.height !== currentHeight) {
       return true;
     }
     if (targetTile.type === 'HAZARD' && targetTile.isHazardActive) {
@@ -235,6 +235,9 @@ export function runSimulation(
 
           currentPos = fwd;
           currentHeight = targetTile.height;
+          if (variables['langkah'] !== undefined) {
+            variables['langkah'] += 1;
+          }
 
           steps.push({
             blockId: block.id,
@@ -330,8 +333,28 @@ export function runSimulation(
             return;
           }
 
+          if (targetTile.type === 'HAZARD' && targetTile.isHazardActive) {
+            steps.push({
+              blockId: block.id,
+              scope,
+              action: 'JUMP',
+              robotState: { x: fwd.x, y: fwd.y, height: targetTile.height, dir: currentDir },
+              crystalsCollected,
+              variablesSnapshot: { ...variables },
+              listsSnapshot: { ...lists },
+              status: 'ZAPPED',
+              message: 'Kodi terkena sengatan laser merah!',
+            });
+            failed = true;
+            failureReason = 'Laser merah aktif menghalangi jalan! Injak saklar terlebih dahulu.';
+            return;
+          }
+
           currentPos = fwd;
           currentHeight = targetTile.height;
+          if (variables['langkah'] !== undefined) {
+            variables['langkah'] += 1;
+          }
 
           steps.push({
             blockId: block.id,
@@ -393,6 +416,19 @@ export function runSimulation(
           const tile = tiles[currentPos.y]?.[currentPos.x];
           if (tile && tile.type === 'SWITCH') {
             tile.isSwitchActive = !tile.isSwitchActive;
+            if (variables['saklar_aktif'] !== undefined) {
+              variables['saklar_aktif'] = tile.isSwitchActive ? 1 : 0;
+            }
+            if (variables['saklar1'] !== undefined || variables['saklar2'] !== undefined) {
+              if (currentPos.x <= 2 && variables['saklar1'] !== undefined) {
+                variables['saklar1'] = tile.isSwitchActive ? 1 : 0;
+              } else if (variables['saklar2'] !== undefined) {
+                variables['saklar2'] = tile.isSwitchActive ? 1 : 0;
+              } else if (variables['saklar1'] !== undefined) {
+                variables['saklar1'] = tile.isSwitchActive ? 1 : 0;
+              }
+            }
+
             const changes: {
               x: number;
               y: number;
@@ -403,7 +439,7 @@ export function runSimulation(
               { x: currentPos.x, y: currentPos.y, isSwitchActive: tile.isSwitchActive },
             ];
 
-            if (tile.switchTargetCoords) {
+            if (tile.switchTargetCoords && tile.switchTargetCoords.length > 0) {
               tile.switchTargetCoords.forEach((coord) => {
                 const targetT = tiles[coord.y]?.[coord.x];
                 if (targetT && targetT.type === 'HAZARD') {
@@ -414,6 +450,19 @@ export function runSimulation(
                     isHazardActive: targetT.isHazardActive,
                   });
                 }
+              });
+            } else {
+              tiles.forEach((row, ry) => {
+                row.forEach((targetT, rx) => {
+                  if (targetT.type === 'HAZARD') {
+                    targetT.isHazardActive = !tile.isSwitchActive;
+                    changes.push({
+                      x: rx,
+                      y: ry,
+                      isHazardActive: targetT.isHazardActive,
+                    });
+                  }
+                });
               });
             }
 
@@ -427,7 +476,21 @@ export function runSimulation(
               variablesSnapshot: { ...variables },
               listsSnapshot: { ...lists },
               status: 'SUCCESS',
-              message: 'Saklar ditekan! Gerbang laser dinonaktifkan.',
+              message: tile.isSwitchActive
+                ? 'Saklar ditekan! Gerbang laser dinonaktifkan.'
+                : 'Saklar dimatikan kembali.',
+            });
+          } else {
+            steps.push({
+              blockId: block.id,
+              scope,
+              action: 'TOGGLE_SWITCH',
+              robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+              crystalsCollected,
+              variablesSnapshot: { ...variables },
+              listsSnapshot: { ...lists },
+              status: 'SUCCESS',
+              message: 'Tidak ada saklar di ubin ini.',
             });
           }
           break;
@@ -529,6 +592,12 @@ export function runSimulation(
               executeBlockList([{ id: block.id + '-jp', type: 'JUMP' }], scope, depth + 1);
             } else if (normalizedItem === 'AMBIL') {
               executeBlockList([{ id: block.id + '-cl', type: 'COLLECT' }], scope, depth + 1);
+            } else if (
+              normalizedItem === 'SAKLAR' ||
+              normalizedItem === 'TEKAN_SAKLAR' ||
+              normalizedItem === 'TOGGLE_SWITCH'
+            ) {
+              executeBlockList([{ id: block.id + '-sw', type: 'TOGGLE_SWITCH' }], scope, depth + 1);
             }
           }
           break;

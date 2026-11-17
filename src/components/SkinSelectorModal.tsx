@@ -1,7 +1,11 @@
 import React from 'react';
 import { RobotSkinId } from '../types/game';
+import { ROBOT_SKINS, RobotSkinOption } from '../data/skins';
 import { sounds } from '../utils/audio';
 import { X, Check, Lock, Palette } from 'lucide-react';
+
+export { ROBOT_SKINS };
+export type { RobotSkinOption };
 
 interface SkinSelectorModalProps {
   currentSkin: RobotSkinId;
@@ -10,76 +14,6 @@ interface SkinSelectorModalProps {
   onClose: () => void;
 }
 
-export interface RobotSkinOption {
-  id: RobotSkinId;
-  name: string;
-  theme: string;
-  description: string;
-  primaryColor: string;
-  glowColor: string;
-  requiredStars: number;
-  visorColor: string;
-  badge: string;
-}
-
-export const ROBOT_SKINS: RobotSkinOption[] = [
-  {
-    id: 'CYAN',
-    name: 'Odibot Klasik Aurora',
-    theme: 'Sian & Biru Antariksa',
-    description: 'Chassis titanium standar stasiun Aurora dengan visor cyan terpolarisasi.',
-    primaryColor: '#06B6D4',
-    glowColor: 'rgba(6, 182, 212, 0.4)',
-    visorColor: '#22D3EE',
-    requiredStars: 0,
-    badge: 'Bawaan',
-  },
-  {
-    id: 'NEON_VOLT',
-    name: 'Volt Energizer',
-    theme: 'Kuning Listrik Neon',
-    description: 'Dilengkapi kapasitor tegangan tinggi untuk algoritma kecepatan penuh.',
-    primaryColor: '#EAB308',
-    glowColor: 'rgba(234, 179, 8, 0.4)',
-    visorColor: '#FDE047',
-    requiredStars: 5,
-    badge: '5 ⭐ Bintang',
-  },
-  {
-    id: 'CYBER_PINK',
-    name: 'Cyberpunk Synthwave',
-    theme: 'Magenta & Violet Neon',
-    description: 'Edisi arcade neon cyberpunk dengan emisi gelombang cahaya futuristik.',
-    primaryColor: '#EC4899',
-    glowColor: 'rgba(236, 72, 153, 0.4)',
-    visorColor: '#F472B6',
-    requiredStars: 15,
-    badge: '15 ⭐ Bintang',
-  },
-  {
-    id: 'EMERALD',
-    name: 'Bio-Scout Zamrud',
-    theme: 'Hijau Zamrud Alam',
-    description: 'Pelindung serat karbon hijau dirancang untuk ekspedisi biosfer asing.',
-    primaryColor: '#10B981',
-    glowColor: 'rgba(16, 185, 129, 0.4)',
-    visorColor: '#34D399',
-    requiredStars: 25,
-    badge: '25 ⭐ Bintang',
-  },
-  {
-    id: 'GOLDEN',
-    name: 'Master Insinyur Emas',
-    theme: 'Emas Berkilau & Obsidian',
-    description: 'Gelar tertinggi olimpiade koding, dilapisi emas murni 24 karat tahan laser.',
-    primaryColor: '#F59E0B',
-    glowColor: 'rgba(245, 158, 11, 0.5)',
-    visorColor: '#FBBF24',
-    requiredStars: 40,
-    badge: '40 ⭐ Bintang',
-  },
-];
-
 export const SkinSelectorModal: React.FC<SkinSelectorModalProps> = ({
   currentSkin,
   totalStars,
@@ -87,17 +21,17 @@ export const SkinSelectorModal: React.FC<SkinSelectorModalProps> = ({
   onClose,
 }) => {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-xl max-h-[92dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/70">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-500 text-white shadow-md">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800 bg-slate-950/70 gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-500 text-white shadow-md shrink-0">
               <Palette className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-base font-bold font-display text-white">Bengkel Kostum Robot Odibot</h2>
-              <p className="text-xs text-slate-400">Pilih warna dan gaya visual robot kodingmu</p>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold font-display text-white truncate">Bengkel Kostum Odibot</h2>
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate">Pilih warna dan gaya visual robotmu</p>
             </div>
           </div>
 
@@ -106,22 +40,22 @@ export const SkinSelectorModal: React.FC<SkinSelectorModalProps> = ({
               sounds.playClick();
               onClose();
             }}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+            className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Current Stars Badge */}
-        <div className="px-6 py-2.5 bg-slate-950/40 border-b border-slate-800 flex items-center justify-between text-xs">
-          <span className="text-slate-400">Koleksi Bintangmu Saat Ini:</span>
+        <div className="px-4 sm:px-6 py-2.5 bg-slate-950/40 border-b border-slate-800 flex items-center justify-between text-xs shrink-0">
+          <span className="text-slate-400">Koleksi Bintangmu:</span>
           <span className="font-bold text-amber-400 font-mono flex items-center gap-1">
-            ⭐ {totalStars} Bintang Dikumpulkan
+            ⭐ {totalStars} Bintang
           </span>
         </div>
 
         {/* Skins Grid */}
-        <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3.5 overflow-y-auto max-h-[60vh]">
+        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 overflow-y-auto flex-1">
           {ROBOT_SKINS.map((skin) => {
             const isUnlocked = totalStars >= skin.requiredStars;
             const isSelected = currentSkin === skin.id;

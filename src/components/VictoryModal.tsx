@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LevelDefinition } from '../types/game';
 import { sounds } from '../utils/audio';
+import { getLevelThresholds } from '../utils/codeConverter';
 import { Star, ArrowRight, RotateCcw, ListFilter, Code2, Award, CheckCircle } from 'lucide-react';
 
 interface VictoryModalProps {
@@ -27,25 +28,26 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   onOpenLevelSelect,
 }) => {
   const [showPython, setShowPython] = useState(false);
+  const [threeStarLimit, twoStarLimit] = getLevelThresholds(level);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden p-6 text-slate-100 flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4 sm:p-6 text-slate-100 flex flex-col">
         {/* Glow backdrop behind stars */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-32 bg-amber-500/15 blur-3xl pointer-events-none" />
 
         {/* Celebration Title */}
-        <div className="text-center mb-4">
+        <div className="text-center mb-3 sm:mb-4">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full text-xs font-semibold mb-2">
             <CheckCircle className="w-3.5 h-3.5" />
             <span>Misi Berhasil Dituntaskan!</span>
           </div>
-          <h2 className="text-2xl font-bold font-display text-white">{level.title}</h2>
+          <h2 className="text-xl sm:text-2xl font-bold font-display text-white">{level.title}</h2>
           <p className="text-xs text-slate-400">{level.subtitle}</p>
         </div>
 
         {/* 3-Star Badges */}
-        <div className="flex items-center justify-center gap-4 my-3">
+        <div className="flex items-center justify-center gap-3 sm:gap-4 my-2 sm:my-3">
           {[1, 2, 3].map((starIdx) => {
             const hasStar = starIdx <= starsEarned;
             return (
@@ -58,13 +60,17 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
                 }`}
               >
                 <Star
-                  className={`w-8 h-8 ${
+                  className={`w-7 h-7 sm:w-8 sm:h-8 ${
                     hasStar ? 'text-amber-400 fill-amber-400 animate-bounce' : 'text-slate-600'
                   }`}
                   style={{ animationIterationCount: 1, animationDelay: `${starIdx * 150}ms` }}
                 />
-                <span className="text-[10px] font-medium text-slate-300 mt-1">
-                  {starIdx === 1 ? 'Misi Selesai' : starIdx === 2 ? 'Semua Kristal' : 'Efisiensi Blok'}
+                <span className="text-[10px] font-medium text-slate-300 mt-1 text-center leading-tight">
+                  {starIdx === 1
+                    ? 'Misi & Kristal'
+                    : starIdx === 2
+                    ? `Efisien (≤ ${twoStarLimit})`
+                    : `Optimal (≤ ${threeStarLimit})`}
                 </span>
               </div>
             );
@@ -84,7 +90,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             <div className="font-mono font-bold text-cyan-400 text-sm">
               {totalBlocksUsed} balok{' '}
               <span className="text-[11px] font-normal text-slate-500">
-                (target ≤ {level.maxBlocksFor3Stars})
+                (maks. {threeStarLimit} untuk 3★)
               </span>
             </div>
           </div>
@@ -93,7 +99,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         {/* Educational Takeaway (Pedagogical Reflection) */}
         <div className="p-3.5 my-2 bg-gradient-to-r from-blue-950/40 to-slate-950/60 border border-blue-800/40 rounded-xl text-left">
           <div className="flex items-center gap-1.5 text-xs font-bold text-blue-300 mb-1">
-            <Award className="w-4 h-4 text-blue-400" />
+            <Award className="w-4 h-4 text-blue-400 shrink-0" />
             <span>Konsep Koding: {level.conceptTitle}</span>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed">
@@ -108,11 +114,11 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               sounds.playClick();
               setShowPython(!showPython);
             }}
-            className="w-full flex items-center justify-between px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 hover:text-white transition-colors"
+            className="w-full min-h-[40px] flex items-center justify-between px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 hover:text-white transition-colors"
           >
             <span className="flex items-center gap-1.5 text-amber-300 font-mono">
               <Code2 className="w-4 h-4" />
-              Lihat Solusi dalam Bahasa Python
+              Lihat Solusi Python
             </span>
             <span className="text-xs text-slate-500">{showPython ? 'Sembunyikan' : 'Buka'}</span>
           </button>
@@ -131,7 +137,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               sounds.playClick();
               onReplay();
             }}
-            className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors"
             title="Mainkan Lagi"
           >
             <RotateCcw className="w-4 h-4" />
@@ -142,7 +148,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               sounds.playClick();
               onOpenLevelSelect();
             }}
-            className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
+            className="flex-1 min-h-[44px] py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
           >
             <ListFilter className="w-4 h-4 text-cyan-400" />
             <span>Daftar Level</span>
@@ -153,7 +159,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               sounds.playClick();
               onNextLevel();
             }}
-            className="flex-1 py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20 transition-all flex items-center justify-center gap-1.5"
+            className="flex-1 min-h-[44px] py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20 transition-all flex items-center justify-center gap-1.5"
           >
             <span>Misi Berikutnya</span>
             <ArrowRight className="w-4 h-4" />

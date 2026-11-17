@@ -39,25 +39,24 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
   const [activeTab, setActiveTab] = useState<'MEMORY' | 'TRACE' | 'TERMINAL'>('MEMORY');
   const [isCollapsed, setIsCollapsed] = useState(true);
 
-  // Calculate battery percentage if present
+  // Calculate battery percentage relative to level's initial battery capacity
   const batteryVal = variables['baterai'] !== undefined ? variables['baterai'] : null;
+  const maxBattery = Math.max(1, level.initialVariables?.baterai ?? 8);
+  const batteryPct = batteryVal !== null ? Math.min(100, Math.max(0, (batteryVal / maxBattery) * 100)) : 0;
 
   return (
-    <div className="bg-slate-950/95 border border-slate-800 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md transition-all">
+    <div className="bg-slate-950 border border-slate-800 rounded-xl sm:rounded-2xl shadow-xl overflow-hidden">
       {/* Top Header of Inspector */}
-      <div className="flex items-center justify-between px-3 py-2 bg-slate-900/90 border-b border-slate-800 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-mono font-bold text-cyan-400 tracking-wider flex items-center gap-1.5">
-            <Cpu className="w-3.5 h-3.5" />
-            <span>INSPEKTOR MEMORI & TRACE</span>
-          </span>
-          <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
-            CPU: 60FPS · ARSITEKTUR KOMPUTASI
+      <div className="flex items-center justify-between px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-900/90 border-b border-slate-800 text-xs gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Cpu className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span className="font-mono font-bold text-cyan-400 tracking-wide truncate text-[11px] sm:text-xs">
+            <span className="sm:hidden">INSPEKTOR RAM</span>
+            <span className="hidden sm:inline">INSPEKTOR MEMORI &amp; TRACE</span>
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {/* Tabs */}
           <button
             onClick={() => {
@@ -65,14 +64,15 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
               setActiveTab('MEMORY');
               setIsCollapsed(false);
             }}
-            className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 ${
+            className={`px-2 py-1 min-h-[30px] rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 ${
               activeTab === 'MEMORY' && !isCollapsed
                 ? 'bg-cyan-600 text-white'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Radio className="w-3 h-3" />
-            <span>Memori RAM</span>
+            <span className="hidden sm:inline">Memori RAM</span>
+            <span className="sm:hidden">RAM</span>
           </button>
 
           <button
@@ -81,14 +81,15 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
               setActiveTab('TRACE');
               setIsCollapsed(false);
             }}
-            className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 ${
+            className={`px-2 py-1 min-h-[30px] rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 ${
               activeTab === 'TRACE' && !isCollapsed
                 ? 'bg-purple-600 text-white'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Table className="w-3 h-3" />
-            <span>Tabel Trace</span>
+            <span className="hidden sm:inline">Tabel Trace</span>
+            <span className="sm:hidden">Trace</span>
           </button>
 
           <button
@@ -97,14 +98,15 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
               setActiveTab('TERMINAL');
               setIsCollapsed(false);
             }}
-            className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 ${
+            className={`px-2 py-1 min-h-[30px] rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 ${
               activeTab === 'TERMINAL' && !isCollapsed
                 ? 'bg-amber-600 text-white'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Terminal className="w-3 h-3" />
-            <span>Log Konsol</span>
+            <span className="hidden sm:inline">Log Konsol</span>
+            <span className="sm:hidden">Log</span>
           </button>
 
           {/* Minimize / Maximize */}
@@ -113,7 +115,7 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
               sounds.playClick();
               setIsCollapsed(!isCollapsed);
             }}
-            className="p-1 hover:text-white text-slate-400 transition-colors ml-1"
+            className="min-h-[30px] min-w-[30px] flex items-center justify-center hover:text-white text-slate-400 transition-colors ml-0.5"
             title={isCollapsed ? 'Perluas Inspektor' : 'Kecilkan Inspektor'}
           >
             {isCollapsed ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
@@ -135,16 +137,16 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
                     <span>Reg. Baterai:</span>
                   </span>
                   <span className="text-cyan-300 font-bold">
-                    {batteryVal !== null ? `${batteryVal}` : 'N/A'}
+                    {batteryVal !== null ? `${batteryVal} / ${maxBattery}` : 'N/A'}
                   </span>
                 </div>
                 {batteryVal !== null ? (
                   <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
                     <div
                       className={`h-full transition-all duration-300 ${
-                        batteryVal > 3 ? 'bg-cyan-400' : batteryVal > 1 ? 'bg-amber-400' : 'bg-rose-500'
+                        batteryPct > 40 ? 'bg-cyan-400' : batteryPct > 20 ? 'bg-amber-400' : 'bg-rose-500'
                       }`}
-                      style={{ width: `${Math.min(100, Math.max(5, (batteryVal / 8) * 100))}%` }}
+                      style={{ width: `${batteryVal > 0 ? Math.max(5, batteryPct) : 0}%` }}
                     />
                   </div>
                 ) : (

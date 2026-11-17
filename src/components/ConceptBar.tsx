@@ -1,6 +1,7 @@
 import React from 'react';
 import { LevelDefinition } from '../types/game';
 import { sounds } from '../utils/audio';
+import { getLevelThresholds } from '../utils/codeConverter';
 import {
   CheckCircle2,
   Circle,
@@ -62,27 +63,29 @@ export const ConceptBar: React.FC<ConceptBarProps> = ({
   }
 
   const allCrystalsCollected = crystalsCollected >= totalCrystalsInLevel && totalCrystalsInLevel > 0;
-  const isBlocksEfficient = totalBlocksUsed <= level.maxBlocksFor3Stars;
+  const [threeStarLimit, twoStarLimit] = getLevelThresholds(level);
+  const isBlocksEfficient = totalBlocksUsed <= threeStarLimit;
+  const isBlocksModerate = totalBlocksUsed <= twoStarLimit;
 
   return (
-    <div className="bg-slate-900/90 border-b border-slate-800 px-3 sm:px-4 py-1.5 sm:py-2 shrink-0 flex items-center justify-between gap-2 sm:gap-3 shadow-sm overflow-hidden">
+    <div className="bg-slate-900/90 border-b border-slate-800 px-3 sm:px-4 py-1.5 sm:py-2 shrink-0 flex items-center justify-between gap-2 shadow-sm">
       {/* Left Zone: Active Learning Concept & Story Briefing */}
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-        <div className={`p-1.5 sm:p-2 rounded-xl border flex items-center justify-center shrink-0 ${categoryColor}`}>
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className={`p-1.5 rounded-lg border flex items-center justify-center shrink-0 ${categoryColor}`}>
           <ConceptIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-            <span className="text-xs font-bold text-white flex items-center gap-1 font-display truncate">
-              <span>{level.conceptTitle}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-white font-display truncate">
+              {level.conceptTitle}
             </span>
             <button
               onClick={() => {
                 sounds.playClick();
                 onOpenConceptModal(topicId);
               }}
-              className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold text-cyan-300 hover:text-cyan-200 bg-cyan-950/80 hover:bg-cyan-900/80 px-2 py-0.5 rounded-full border border-cyan-800/80 transition-colors shrink-0"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 hover:text-cyan-200 bg-cyan-950/80 hover:bg-cyan-900/80 px-2 py-0.5 rounded-lg border border-cyan-800/80 transition-colors shrink-0 min-h-[28px]"
               title="Baca teori koding, tabel trace & contoh Python untuk topik ini"
             >
               <BookOpen className="w-3 h-3" />
@@ -90,7 +93,7 @@ export const ConceptBar: React.FC<ConceptBarProps> = ({
               <span className="sm:hidden">Teori</span>
             </button>
             {level.realWorldCS && (
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-800/60 px-2 py-0.2 rounded hidden xl:inline">
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-800/60 px-2 py-0.5 rounded hidden xl:inline shrink-0">
                 🚀 {level.realWorldCS}
               </span>
             )}
@@ -102,42 +105,48 @@ export const ConceptBar: React.FC<ConceptBarProps> = ({
         </div>
       </div>
 
-      {/* Right Zone: 3-Star Objectives Checklist */}
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {/* Objectives Progress */}
-        <div className="flex items-center gap-3 text-xs bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-xl">
-          <div className="flex items-center gap-1 text-slate-300 font-medium" title="Tujuan Utama">
+      {/* Right Zone: Objectives Checklist & Solution Button */}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Clean Tabular Objectives Summary */}
+        <div className="flex items-center gap-2 sm:gap-3 text-xs bg-slate-950/80 border border-slate-800 px-2 sm:px-3 py-1 rounded-xl tabular-nums">
+          <div className="hidden sm:flex items-center gap-1 text-slate-300 font-medium" title="Tujuan Utama">
             <Circle className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Terminal Emas</span>
+            <span>Terminal Emas</span>
           </div>
 
           <div
             className={`flex items-center gap-1 font-medium transition-colors ${
-              allCrystalsCollected ? 'text-emerald-400' : 'text-slate-400'
+              allCrystalsCollected ? 'text-emerald-400' : 'text-slate-300'
             }`}
             title="Kumpulkan Semua Kristal Energi"
           >
             {allCrystalsCollected ? (
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             ) : (
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400" />
             )}
-            <span>
-              💎 {crystalsCollected}/{totalCrystalsInLevel}
+            <span className="font-mono text-[11px] sm:text-xs">
+              {crystalsCollected}/{totalCrystalsInLevel}
             </span>
           </div>
 
+          <span className="text-slate-700 sm:hidden" aria-hidden="true">·</span>
+
           <div
-            className={`flex items-center gap-1 font-medium font-mono transition-colors ${
-              isBlocksEfficient ? 'text-emerald-400' : 'text-amber-400'
+            className={`flex items-center gap-1 font-medium font-mono transition-colors text-[11px] sm:text-xs ${
+              isBlocksEfficient
+                ? 'text-emerald-400'
+                : isBlocksModerate
+                ? 'text-amber-400'
+                : 'text-rose-400'
             }`}
-            title={`Efisiensi: Maksimal ${level.maxBlocksFor3Stars} balok`}
+            title={`Acuan Bintang — 3★: maks. ${threeStarLimit} balok · 2★: maks. ${twoStarLimit} balok`}
           >
             <span className="text-[10px] uppercase tracking-wider text-slate-500 font-sans hidden sm:inline">
               Balok:
             </span>
             <span>
-              {totalBlocksUsed}/{level.maxBlocksFor3Stars}★
+              {totalBlocksUsed}/{threeStarLimit}★
             </span>
           </div>
         </div>
@@ -150,11 +159,12 @@ export const ConceptBar: React.FC<ConceptBarProps> = ({
               onLoadStarterCode();
             }}
             disabled={isSimulating}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 min-h-[34px] bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white rounded-xl text-[11px] sm:text-xs font-bold shadow-md transition-all active:scale-95 disabled:opacity-50"
             title="Muat balok bantuan atau solusi awal untuk level ini"
           >
-            <HelpCircle className="w-3.5 h-3.5" />
-            <span>Contoh Solusi</span>
+            <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">Contoh Solusi</span>
+            <span className="sm:hidden">Solusi</span>
           </button>
         )}
       </div>

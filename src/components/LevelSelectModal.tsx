@@ -85,19 +85,19 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-b border-slate-800 bg-slate-950/70">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold font-display text-white flex items-center gap-2">
-              <span>Peta 60 Misi Odibot Adventure</span>
-              <span className="text-xs font-mono font-normal text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-800/80">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-3.5 border-b border-slate-800 bg-slate-950/70 gap-2 shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-lg font-bold font-display text-white flex flex-wrap items-center gap-2">
+              <span className="truncate">Peta 60 Misi Odibot</span>
+              <span className="text-[11px] font-mono font-normal text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-800/80 shrink-0">
                 {totalCompleted} / {ALL_LEVELS.length} Selesai
               </span>
             </h2>
-            <p className="text-xs text-slate-400">
-              Setiap zona memiliki 10 variasi tantangan bertingkat dari Mudah hingga Master
+            <p className="text-[11px] sm:text-xs text-slate-400 truncate mt-0.5">
+              Setiap zona memiliki 10 variasi tantangan dari Mudah hingga Master
             </p>
           </div>
           <button
@@ -105,14 +105,14 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
               sounds.playClick();
               onClose();
             }}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+            className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Zone Selector Tabs */}
-        <div className="flex items-center gap-1.5 px-6 py-2.5 bg-slate-950/50 border-b border-slate-800 overflow-x-auto scrollbar-thin">
+        <div className="flex items-center gap-1.5 px-3 sm:px-6 py-2 bg-slate-950/50 border-b border-slate-800 overflow-x-auto no-scrollbar shrink-0">
           {ZONES.map((zone) => {
             const isSelected = zone.id === selectedZoneId;
             const completedInZone = ALL_LEVELS.filter(
@@ -126,7 +126,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                   sounds.playClick();
                   setSelectedZoneId(zone.id);
                 }}
-                className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl whitespace-nowrap transition-all shrink-0 ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 py-2 min-h-[38px] text-xs font-semibold rounded-xl whitespace-nowrap transition-all shrink-0 ${
                   isSelected
                     ? 'bg-slate-800 text-white shadow-sm border border-slate-700'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
@@ -147,18 +147,18 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
         </div>
 
         {/* Zone Description & Difficulty Filter Bar */}
-        <div className="px-6 py-3 bg-slate-950/30 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs">
-          <div>
+        <div className="px-4 sm:px-6 py-2.5 sm:py-3 bg-slate-950/30 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs shrink-0">
+          <div className="min-w-0 w-full sm:w-auto">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-200">{selectedZone.title}</span>
-              <span className="text-[11px] text-slate-400">· 10 Misi Variasi</span>
+              <span className="font-bold text-slate-200 truncate">{selectedZone.title}</span>
+              <span className="text-[11px] text-slate-400 shrink-0">· 10 Misi</span>
             </div>
-            <p className="text-slate-400 text-[11px] mt-0.5">{selectedZone.description}</p>
+            <p className="text-slate-400 text-[11px] mt-0.5 line-clamp-2 sm:line-clamp-1">{selectedZone.description}</p>
           </div>
 
           {/* Difficulty Filter Tabs */}
-          <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl self-stretch sm:self-auto shrink-0">
-            <span className="text-[11px] text-slate-500 px-1.5 flex items-center gap-1">
+          <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl w-full sm:w-auto overflow-x-auto no-scrollbar shrink-0">
+            <span className="text-[11px] text-slate-500 px-1.5 flex items-center gap-1 shrink-0">
               <Filter className="w-3 h-3" />
             </span>
             <button
@@ -166,7 +166,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                 sounds.playClick();
                 setSelectedDifficulty('ALL');
               }}
-              className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all ${
+              className={`px-2.5 py-1 min-h-[32px] rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap shrink-0 ${
                 selectedDifficulty === 'ALL'
                   ? 'bg-cyan-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -188,7 +188,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                     sounds.playClick();
                     setSelectedDifficulty(diff);
                   }}
-                  className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all ${
+                  className={`px-2.5 py-1 min-h-[32px] rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap shrink-0 ${
                     isActive ? conf.activeBtnClass : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -200,7 +200,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
         </div>
 
         {/* Levels Grid */}
-        <div className="flex-1 p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 bg-slate-950/40">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5 bg-slate-950/40">
           {filteredLevels.map((lvl) => {
             const levelProgress = progress.completedLevels[lvl.id];
             const isCompleted = !!levelProgress;
@@ -265,7 +265,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                 </div>
 
                 <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-500 font-mono">Target: ≤{lvl.maxBlocksFor3Stars} balok</span>
+                  <span className="text-slate-500 font-mono">Maks: {lvl.maxBlocksFor3Stars} balok</span>
                   {isCompleted ? (
                     <span className="flex items-center gap-1 text-emerald-400 font-medium">
                       <CheckCircle className="w-3.5 h-3.5" />
