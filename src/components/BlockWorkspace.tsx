@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { BlockCommand, CommandType, LevelDefinition } from '../types/game';
 import { countTotalBlocks, blocksToPython, getLevelThresholds } from '../utils/codeConverter';
 import { sounds } from '../utils/audio';
@@ -73,7 +73,12 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
   const [paletteCategory, setPaletteCategory] = useState<PaletteCategory>('ALL');
   const [copiedPython, setCopiedPython] = useState(false);
   const [justAddedNotice, setJustAddedNotice] = useState<string | null>(null);
+  const [activeContainerId, setActiveContainerId] = useState<string | null>(null);
   const sequenceContainerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setActiveContainerId(null);
+  }, [level.id, activeTab]);
 
   const totalUsedBlocks = countTotalBlocks(mainBlocks, f1Blocks, f2Blocks);
   const [threeStarLimit, twoStarLimit] = getLevelThresholds(level);
@@ -89,6 +94,29 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
       : activeTab === 'F1'
       ? setF1Blocks
       : setF2Blocks;
+
+  const findBlockById = (list: BlockCommand[], targetId: string): BlockCommand | null => {
+    for (const item of list) {
+      if (item.id === targetId) return item;
+      if (item.children) {
+        const found = findBlockById(item.children, targetId);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const activeContainer = useMemo(
+    () => (activeContainerId ? findBlockById(currentList, activeContainerId) : null),
+    [activeContainerId, currentList]
+  );
+
+  const isContainerType = (type: CommandType) =>
+    type === 'REPEAT' ||
+    type === 'WHILE_VAR' ||
+    type === 'IF_VAR' ||
+    type === 'IF_COLOR' ||
+    type === 'IF_OBSTACLE';
 
   const createBlockCommand = (type: CommandType): BlockCommand => {
     const defaultVarName = Object.keys(level.initialVariables || {})[0] || 'baterai';
@@ -174,15 +202,42 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
     );
   };
 
-  // Add command to active slot
+  // Add command to active slot (or inside activeContainerId if user is currently filling a loop/if)
   const handleAddCommand = (type: CommandType) => {
     if (isSimulating) return;
     sounds.playStep();
-    setJustAddedNotice('Balok berhasil dipasang! 🚀');
-    setTimeout(() => setJustAddedNotice(null), 3500);
 
     const newBlock = createBlockCommand(type);
+    const isLoopBlock = type === 'REPEAT' || type === 'WHILE_VAR';
+    const isConditionalBlock = type === 'IF_VAR' || type === 'IF_COLOR' || type === 'IF_OBSTACLE';
+
+    // If user is currently filling a loop/conditional and clicks a regular action or conditional, put it inside!
+    // If user clicks REPEAT/WHILE_VAR from main palette, add at root so sequential loops work effortlessly and auto-target the new loop.
+    if (activeContainer && !isLoopBlock) {
+      setCurrentList((prev) =>
+        mapBlocksRecursive(prev, activeContainer.id, (b) => ({
+          ...b,
+          children: [...(b.children || []), newBlock],
+        }))
+      );
+      if (isConditionalBlock) {
+        setActiveContainerId(newBlock.id);
+        setJustAddedNotice('Kondisi masuk ke blok! Isi aksinya ✨');
+      } else {
+        setJustAddedNotice('Masuk ke dalam Loop/Blok! 🔁');
+      }
+      setTimeout(() => setJustAddedNotice(null), 3500);
+      return;
+    }
+
     setCurrentList((prev) => [...prev, newBlock]);
+    if (isContainerType(type)) {
+      setActiveContainerId(newBlock.id);
+      setJustAddedNotice('Mode Isi Blok aktif! Klik perintah di kiri 🔁');
+    } else {
+      setJustAddedNotice('Balok berhasil dipasang! 🚀');
+    }
+    setTimeout(() => setJustAddedNotice(null), 3500);
 
     // Smooth scroll to bottom so student immediately sees the new block added
     setTimeout(() => {
@@ -209,12 +264,18 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
         children: [...(b.children || []), newChild],
       }))
     );
+    if (isContainerType(type)) {
+      setActiveContainerId(newChild.id);
+    }
   };
 
   // Delete block at any depth
   const handleDeleteBlock = (id: string) => {
     if (isSimulating) return;
     sounds.playClick();
+    if (id === activeContainerId) {
+      setActiveContainerId(null);
+    }
     setCurrentList((prev) => deleteBlockRecursive(prev, id));
   };
 
@@ -234,6 +295,33 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
         const current = b.repeatCount || 3;
         const next = Math.max(1, Math.min(12, current + delta));
         return { ...b, repeatCount: next };
+      })
+    );
+  };
+
+  // Adjust variable threshold (WHILE_VAR / IF_VAR)
+  const handleAdjustVarValue = (id: string, delta: number) => {
+    if (isSimulating) return;
+    sounds.playClick();
+    setCurrentList((prev) =>
+      mapBlocksRecursive(prev, id, (b) => {
+        const current = typeof b.varValue === 'number' ? b.varValue : 0;
+        const next = Math.max(0, Math.min(20, current + delta));
+        return { ...b, varValue: next };
+      })
+    );
+  };
+
+  // Cycle variable comparison operator (WHILE_VAR / IF_VAR)
+  const handleCycleVarOperator = (id: string) => {
+    if (isSimulating) return;
+    sounds.playClick();
+    const ops: Array<'>' | '>=' | '==' | '<'> = ['>', '>=', '==', '<'];
+    setCurrentList((prev) =>
+      mapBlocksRecursive(prev, id, (b) => {
+        const idx = ops.indexOf((b.varOperator as '>' | '>=' | '==' | '<') || '>');
+        const next = ops[(idx + 1) % ops.length];
+        return { ...b, varOperator: next };
       })
     );
   };
@@ -258,6 +346,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
   const handleClearCurrent = () => {
     if (isSimulating) return;
     sounds.playClick();
+    setActiveContainerId(null);
     setCurrentList([]);
   };
 
@@ -837,6 +926,35 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
               )}
             </div>
 
+            {/* Active Container Targeting Banner */}
+            {activeContainer && (
+              <div className="mx-2.5 mt-2 px-3 py-2 rounded-xl bg-gradient-to-r from-purple-950 to-indigo-950 border border-amber-400/70 flex items-center justify-between gap-2 shadow-md shrink-0">
+                <div className="text-[11px] text-purple-100 leading-snug min-w-0">
+                  <span className="font-bold text-amber-300">🎯 Mengisi ke Dalam Loop/Blok:</span>{' '}
+                  <span className="text-slate-200">
+                    Klik perintah di palet untuk memasukkannya ke dalam{' '}
+                    <strong className="text-white">
+                      {activeContainer.type === 'REPEAT'
+                        ? `Ulangi (${activeContainer.repeatCount || 3}x)`
+                        : activeContainer.type === 'WHILE_VAR'
+                        ? `Selama (${activeContainer.varName || 'baterai'} ${activeContainer.varOperator || '>'} ${activeContainer.varValue ?? 0})`
+                        : 'Blok Kondisi'}
+                    </strong>
+                    .
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    sounds.playClick();
+                    setActiveContainerId(null);
+                  }}
+                  className="px-2.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] rounded-lg shrink-0 shadow transition-colors"
+                >
+                  ✓ Selesai Isi
+                </button>
+              </div>
+            )}
+
             {/* Area Balok yang Sudah Dimasukkan */}
             <div ref={sequenceContainerRef} className="flex-1 p-2.5 overflow-y-auto space-y-1.5">
               {currentList.length === 0 ? (
@@ -876,11 +994,30 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                       onDelete={handleDeleteBlock}
                       onMove={handleMoveBlock}
                       onAdjustRepeat={handleAdjustRepeat}
+                      onAdjustVarValue={handleAdjustVarValue}
+                      onCycleVarOperator={handleCycleVarOperator}
                       onToggleColor={handleToggleColor}
                       onAddChild={handleAddChildCommand}
                       activeExecutingBlockId={activeExecutingBlockId}
+                      activeContainerId={activeContainerId}
+                      onToggleTargetContainer={(id) => {
+                        sounds.playClick();
+                        setActiveContainerId((prev) => (prev === id ? null : id));
+                      }}
                     />
                   ))}
+
+                  {activeContainer && (
+                    <button
+                      onClick={() => {
+                        sounds.playClick();
+                        setActiveContainerId(null);
+                      }}
+                      className="w-full py-2 px-3 rounded-xl border border-dashed border-cyan-500/50 bg-cyan-950/30 hover:bg-cyan-950/60 text-cyan-300 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <span>↳ Selesai Isi Loop — Tambah Balok Selanjutnya di Luar</span>
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -903,9 +1040,13 @@ interface BlockCardProps {
   onDelete: (id: string) => void;
   onMove: (id: string, direction: 'UP' | 'DOWN') => void;
   onAdjustRepeat: (id: string, delta: number) => void;
+  onAdjustVarValue: (id: string, delta: number) => void;
+  onCycleVarOperator: (id: string) => void;
   onToggleColor: (id: string) => void;
   onAddChild: (parentId: string, type: CommandType) => void;
   activeExecutingBlockId?: string;
+  activeContainerId: string | null;
+  onToggleTargetContainer: (id: string) => void;
 }
 
 const CHILD_COMMAND_LABELS: { type: CommandType; shortLabel: string; title: string }[] = [
@@ -934,9 +1075,13 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
   onDelete,
   onMove,
   onAdjustRepeat,
+  onAdjustVarValue,
+  onCycleVarOperator,
   onToggleColor,
   onAddChild,
   activeExecutingBlockId,
+  activeContainerId,
+  onToggleTargetContainer,
 }) => {
   const isLoop = block.type === 'REPEAT';
   const isWhileVar = block.type === 'WHILE_VAR';
@@ -944,6 +1089,7 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
   const isIfColor = block.type === 'IF_COLOR';
   const isIfObstacle = block.type === 'IF_OBSTACLE';
   const isContainer = isLoop || isWhileVar || isIfVar || isIfColor || isIfObstacle;
+  const isTargeted = isContainer && activeContainerId === block.id;
 
   let bgStyle = 'bg-blue-600 text-white';
   let label = 'Perintah';
@@ -1032,6 +1178,8 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
       className={`relative rounded-xl border p-2.5 transition-all shadow-md ${bgStyle} ${
         isActive
           ? 'ring-4 ring-yellow-400 shadow-yellow-500/50 scale-[1.02] z-10'
+          : isTargeted
+          ? 'ring-2 ring-amber-300 shadow-amber-400/20'
           : 'hover:shadow-lg'
       }`}
     >
@@ -1050,7 +1198,7 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
         </div>
 
         {/* Action Controls: Move Up, Move Down, Delete (touch-sized on mobile) */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 flex-wrap">
           {isLoop && (
             <div className="flex items-center gap-0.5 bg-black/25 px-1 py-0.5 rounded-lg mr-0.5">
               <button
@@ -1071,6 +1219,38 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
                 title="Tambah kali perulangan"
               >
                 <Plus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
+              </button>
+            </div>
+          )}
+
+          {(isWhileVar || isIfVar) && (
+            <div className="flex items-center gap-0.5 bg-black/25 px-1 py-0.5 rounded-lg mr-0.5">
+              <button
+                onClick={() => onCycleVarOperator(block.id)}
+                disabled={isSimulating}
+                className="px-1.5 py-0.5 text-[11px] font-mono font-bold bg-black/30 hover:bg-black/50 rounded text-amber-300"
+                title="Ubah operator perbandingan"
+              >
+                {block.varOperator || '>'}
+              </button>
+              <button
+                onClick={() => onAdjustVarValue(block.id, -1)}
+                disabled={isSimulating || (typeof block.varValue === 'number' ? block.varValue : 0) <= 0}
+                className="min-h-[28px] min-w-[28px] sm:min-h-0 sm:min-w-0 flex items-center justify-center hover:text-yellow-300 disabled:opacity-40 p-0.5"
+                title="Kurangi nilai pembanding"
+              >
+                <Minus className="w-3 h-3" />
+              </button>
+              <span className="text-[11px] font-mono font-bold px-1 tabular-nums">
+                {block.varValue ?? 0}
+              </span>
+              <button
+                onClick={() => onAdjustVarValue(block.id, 1)}
+                disabled={isSimulating || (typeof block.varValue === 'number' ? block.varValue : 0) >= 20}
+                className="min-h-[28px] min-w-[28px] sm:min-h-0 sm:min-w-0 flex items-center justify-center hover:text-yellow-300 disabled:opacity-40 p-0.5"
+                title="Tambah nilai pembanding"
+              >
+                <Plus className="w-3 h-3" />
               </button>
             </div>
           )}
@@ -1114,16 +1294,29 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
 
       {/* Nested Body for Containers (Repeat / While / If) */}
       {isContainer && (
-        <div className="mt-2.5 pl-2.5 border-l-2 border-white/40 space-y-2 bg-black/20 p-2 rounded-lg">
+        <div className="mt-2.5 pl-2.5 border-l-2 border-white/40 space-y-2 bg-black/25 p-2 rounded-lg">
           <div className="text-[11px] sm:text-[10px] font-semibold opacity-95 flex flex-col gap-1.5">
-            <span>Isi di dalam blok:</span>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span>Isi perintah di dalam blok:</span>
+              <button
+                onClick={() => onToggleTargetContainer(block.id)}
+                disabled={isSimulating}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors ${
+                  isTargeted
+                    ? 'bg-amber-400 text-slate-950 shadow'
+                    : 'bg-white/15 hover:bg-white/25 text-white'
+                }`}
+              >
+                {isTargeted ? '🎯 Sedang Diisi (Klik untuk Selesai)' : '+ Isi dari Palet Kiri'}
+              </button>
+            </div>
             <div className="flex items-center gap-1.5 flex-wrap">
               {availableChildActions.map((act) => (
                 <button
                   key={act.type}
                   onClick={() => onAddChild(block.id, act.type)}
                   disabled={isSimulating}
-                  className="px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 min-h-[34px] sm:min-h-0 bg-white/20 hover:bg-white/30 active:scale-95 rounded-lg sm:rounded text-[11px] sm:text-[9px] font-bold transition-colors disabled:opacity-40"
+                  className="px-2.5 py-1.5 sm:px-2 sm:py-1 min-h-[34px] sm:min-h-0 bg-white/25 hover:bg-white/40 border border-white/25 active:scale-95 rounded-lg sm:rounded text-[11px] sm:text-[10px] font-bold transition-colors disabled:opacity-40"
                   title={act.title}
                 >
                   {act.shortLabel}
@@ -1147,15 +1340,19 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
                   onDelete={onDelete}
                   onMove={onMove}
                   onAdjustRepeat={onAdjustRepeat}
+                  onAdjustVarValue={onAdjustVarValue}
+                  onCycleVarOperator={onCycleVarOperator}
                   onToggleColor={onToggleColor}
                   onAddChild={onAddChild}
                   activeExecutingBlockId={activeExecutingBlockId}
+                  activeContainerId={activeContainerId}
+                  onToggleTargetContainer={onToggleTargetContainer}
                 />
               ))}
             </div>
           ) : (
-            <div className="text-[10px] text-white/70 italic py-1">
-              (Blok masih kosong, klik tombol + di atas untuk mengisi perintah)
+            <div className="text-[11px] text-amber-200 font-medium py-1.5 px-2 rounded bg-amber-500/15 border border-amber-400/30">
+              ⚠️ Blok loop masih kosong — klik tombol <strong>+</strong> di atas atau balok di palet kiri untuk mengisinya!
             </div>
           )}
         </div>

@@ -218,15 +218,15 @@ export default function App() {
     // Khusus tantangan 'Debugging' (isDebuggingChallenge), muat kode yang sengaja salah untuk diperbaiki.
     // Contoh solusi untuk misi biasa tetap bisa dibuka siswa lewat tombol '💡 Contoh Solusi'.
     if (level.isDebuggingChallenge && level.buggySolution) {
-      const buggyMain = level.buggySolution.main.map((b) => ({
-        ...b,
-        id: 'dbg-' + Math.random().toString(36).substring(2, 7),
-      }));
+      const cloneWithIds = (list: BlockCommand[], prefix: string): BlockCommand[] =>
+        list.map((b) => ({
+          ...b,
+          id: `${prefix}-${Math.random().toString(36).substring(2, 8)}`,
+          children: b.children ? cloneWithIds(b.children, prefix) : undefined,
+        }));
+      const buggyMain = cloneWithIds(level.buggySolution.main, 'dbg');
       const buggyF1 = level.buggySolution.f1
-        ? level.buggySolution.f1.map((b) => ({
-            ...b,
-            id: 'dbg-' + Math.random().toString(36).substring(2, 7),
-          }))
+        ? cloneWithIds(level.buggySolution.f1, 'dbg')
         : [];
       setMainBlocks(buggyMain);
       setF1Blocks(buggyF1);
@@ -251,36 +251,27 @@ export default function App() {
 
   // Restore starter code on user request
   const handleLoadStarterCode = useCallback(() => {
+    const cloneWithIds = (list: BlockCommand[], prefix: string): BlockCommand[] =>
+      list.map((b) => ({
+        ...b,
+        id: `${prefix}-${Math.random().toString(36).substring(2, 8)}`,
+        children: b.children ? cloneWithIds(b.children, prefix) : undefined,
+      }));
+
     if (currentLevel.starterBlocks) {
-      setMainBlocks(
-        currentLevel.starterBlocks.main.map((b) => ({
-          ...b,
-          id: 'st-' + Math.random().toString(36).substring(2, 7),
-        }))
-      );
+      setMainBlocks(cloneWithIds(currentLevel.starterBlocks.main, 'st'));
       setF1Blocks(
         currentLevel.starterBlocks.f1
-          ? currentLevel.starterBlocks.f1.map((b) => ({
-              ...b,
-              id: 'st-' + Math.random().toString(36).substring(2, 7),
-            }))
+          ? cloneWithIds(currentLevel.starterBlocks.f1, 'st')
           : []
       );
       setF2Blocks([]);
       sounds.playClick();
     } else if (currentLevel.isDebuggingChallenge && currentLevel.buggySolution) {
-      setMainBlocks(
-        currentLevel.buggySolution.main.map((b) => ({
-          ...b,
-          id: 'dbg-' + Math.random().toString(36).substring(2, 7),
-        }))
-      );
+      setMainBlocks(cloneWithIds(currentLevel.buggySolution.main, 'dbg'));
       setF1Blocks(
         currentLevel.buggySolution.f1
-          ? currentLevel.buggySolution.f1.map((b) => ({
-              ...b,
-              id: 'dbg-' + Math.random().toString(36).substring(2, 7),
-            }))
+          ? cloneWithIds(currentLevel.buggySolution.f1, 'dbg')
           : []
       );
       setF2Blocks([]);
@@ -647,27 +638,26 @@ export default function App() {
         dir: robotState.dir,
       });
 
-      // Auto-toggle switch if stepping onto a SWITCH tile manually
+      // Auto-activate switch if stepping onto an inactive SWITCH tile manually
       let updatedTiles = tiles;
-      if (targetTile.type === 'SWITCH') {
+      if (targetTile.type === 'SWITCH' && !targetTile.isSwitchActive) {
         sounds.playSwitch();
         updatedTiles = tiles.map((row) => row.map((t) => ({ ...t })));
         const sw = updatedTiles[ny][nx];
-        const newSwitchState = !sw.isSwitchActive;
-        sw.isSwitchActive = newSwitchState;
+        sw.isSwitchActive = true;
 
         if (sw.switchTargetCoords && sw.switchTargetCoords.length > 0) {
           sw.switchTargetCoords.forEach((coord) => {
             const ht = updatedTiles[coord.y]?.[coord.x];
             if (ht && ht.type === 'HAZARD') {
-              ht.isHazardActive = !ht.isHazardActive;
+              ht.isHazardActive = false;
             }
           });
         } else {
           updatedTiles.forEach((row) => {
             row.forEach((t) => {
               if (t.type === 'HAZARD') {
-                t.isHazardActive = !newSwitchState;
+                t.isHazardActive = false;
               }
             });
           });
@@ -675,9 +665,9 @@ export default function App() {
         setTiles(updatedTiles);
         setCurrentVariables((prev) => ({
           ...prev,
-          ...(prev.saklar_aktif !== undefined ? { saklar_aktif: newSwitchState ? 1 : 0 } : {}),
-          ...(prev.saklar1 !== undefined && nx <= 2 ? { saklar1: newSwitchState ? 1 : 0 } : {}),
-          ...(prev.saklar2 !== undefined && nx > 2 ? { saklar2: newSwitchState ? 1 : 0 } : {}),
+          ...(prev.saklar_aktif !== undefined ? { saklar_aktif: 1 } : {}),
+          ...(prev.saklar1 !== undefined && nx <= 2 ? { saklar1: 1 } : {}),
+          ...(prev.saklar2 !== undefined && nx > 2 ? { saklar2: 1 } : {}),
         }));
       }
 
@@ -689,25 +679,29 @@ export default function App() {
     if (action === 'TOGGLE_SWITCH') {
       const curTile = tiles[robotState.y]?.[robotState.x];
       if (curTile && curTile.type === 'SWITCH') {
+        if (curTile.isSwitchActive) {
+          sounds.playClick();
+          setSimulationErrorMessage('Saklar ini sudah aktif dan gerbang laser sudah terbuka!');
+          return;
+        }
         sounds.playSwitch();
         setActiveAction('TOGGLE_SWITCH');
         const updatedTiles = tiles.map((row) => row.map((t) => ({ ...t })));
         const sw = updatedTiles[robotState.y][robotState.x];
-        const newSwitchState = !sw.isSwitchActive;
-        sw.isSwitchActive = newSwitchState;
+        sw.isSwitchActive = true;
 
         if (sw.switchTargetCoords && sw.switchTargetCoords.length > 0) {
           sw.switchTargetCoords.forEach((coord) => {
             const ht = updatedTiles[coord.y]?.[coord.x];
             if (ht && ht.type === 'HAZARD') {
-              ht.isHazardActive = !ht.isHazardActive;
+              ht.isHazardActive = false;
             }
           });
         } else {
           updatedTiles.forEach((row) => {
             row.forEach((t) => {
               if (t.type === 'HAZARD') {
-                t.isHazardActive = !newSwitchState;
+                t.isHazardActive = false;
               }
             });
           });
@@ -715,9 +709,9 @@ export default function App() {
         setTiles(updatedTiles);
         setCurrentVariables((prev) => ({
           ...prev,
-          ...(prev.saklar_aktif !== undefined ? { saklar_aktif: newSwitchState ? 1 : 0 } : {}),
-          ...(prev.saklar1 !== undefined && robotState.x <= 2 ? { saklar1: newSwitchState ? 1 : 0 } : {}),
-          ...(prev.saklar2 !== undefined && robotState.x > 2 ? { saklar2: newSwitchState ? 1 : 0 } : {}),
+          ...(prev.saklar_aktif !== undefined ? { saklar_aktif: 1 } : {}),
+          ...(prev.saklar1 !== undefined && robotState.x <= 2 ? { saklar1: 1 } : {}),
+          ...(prev.saklar2 !== undefined && robotState.x > 2 ? { saklar2: 1 } : {}),
         }));
       } else {
         sounds.playBump();
@@ -1335,7 +1329,11 @@ export default function App() {
               setActiveConceptTopic(topic);
               setShowConceptModal(true);
             }}
-            onLoadStarterCode={handleLoadStarterCode}
+            onLoadStarterCode={
+              currentLevel.starterBlocks || currentLevel.isDebuggingChallenge
+                ? handleLoadStarterCode
+                : undefined
+            }
             isSimulating={isSimulating}
           />
 
@@ -1546,7 +1544,11 @@ export default function App() {
                 setF2Blocks={setF2Blocks}
                 activeExecutingBlockId={activeExecutingBlockId}
                 isSimulating={isSimulating}
-                onLoadStarterCode={handleLoadStarterCode}
+                onLoadStarterCode={
+                  currentLevel.starterBlocks || currentLevel.isDebuggingChallenge
+                    ? handleLoadStarterCode
+                    : undefined
+                }
                 onRunCode={handleRunCode}
                 autoRunEnabled={autoRunEnabled}
                 onToggleAutoRun={() => setAutoRunEnabled((prev) => !prev)}

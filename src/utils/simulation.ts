@@ -537,17 +537,47 @@ export function runSimulation(
         }
 
         case 'REPEAT': {
+          if (!block.children || block.children.length === 0) {
+            steps.push({
+              blockId: block.id,
+              scope,
+              action: 'REPEAT',
+              robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+              crystalsCollected,
+              variablesSnapshot: { ...variables },
+              listsSnapshot: { ...lists },
+              status: 'BLOCKED',
+              message: 'Blok "Ulangi (Loop)" masih kosong! Masukkan perintah ke dalamnya terlebih dahulu.',
+            });
+            failed = true;
+            failureReason = 'Blok "Ulangi (Loop)" masih kosong! Klik kotak Ulangi lalu tekan balok Maju/Lompat/Ambil untuk mengisinya.';
+            return;
+          }
           const count = block.repeatCount || 2;
           for (let i = 0; i < count; i++) {
             if (failed || executionCount >= MAX_STEPS) break;
-            if (block.children) {
-              executeBlockList(block.children, scope, depth + 1);
-            }
+            executeBlockList(block.children, scope, depth + 1);
           }
           break;
         }
 
         case 'WHILE_VAR': {
+          if (!block.children || block.children.length === 0) {
+            steps.push({
+              blockId: block.id,
+              scope,
+              action: 'WHILE_VAR',
+              robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+              crystalsCollected,
+              variablesSnapshot: { ...variables },
+              listsSnapshot: { ...lists },
+              status: 'BLOCKED',
+              message: 'Blok "Selama (While)" masih kosong! Masukkan perintah ke dalamnya terlebih dahulu.',
+            });
+            failed = true;
+            failureReason = 'Blok "Selama (While)" masih kosong! Masukkan perintah (misal Maju & Ambil Kristal) ke dalam kotak loop terlebih dahulu.';
+            return;
+          }
           const vName = block.varName || 'baterai';
           const op = block.varOperator || '>';
           const targetVal = typeof block.varValue === 'number' ? block.varValue : 0;
@@ -555,9 +585,7 @@ export function runSimulation(
           let loopLimit = 20; // safety ceiling
           while (checkVarCondition(vName, op, targetVal) && loopLimit > 0) {
             if (failed || executionCount >= MAX_STEPS) break;
-            if (block.children) {
-              executeBlockList(block.children, scope, depth + 1);
-            }
+            executeBlockList(block.children, scope, depth + 1);
             loopLimit--;
           }
           break;
