@@ -231,14 +231,16 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {historySteps.slice(-8).map((st, i) => (
+                    {historySteps.slice(-8).map((st, i) => {
+                      const stepNumber = Math.max(0, historySteps.length - 8) + i + 1;
+                      return (
                       <tr
-                        key={i}
+                        key={stepNumber}
                         className={`border-b border-slate-900 hover:bg-slate-900/40 ${
                           st.status !== 'SUCCESS' ? 'text-rose-400 bg-rose-950/20' : 'text-slate-300'
                         }`}
                       >
-                        <td className="py-1 px-2 font-mono text-slate-500">{i + 1}</td>
+                        <td className="py-1 px-2 font-mono text-slate-500">{stepNumber}</td>
                         <td className="py-1 px-2 font-bold text-white">{st.action}</td>
                         <td className="py-1 px-2 font-mono text-cyan-300">
                           ({st.robotState.x}, {st.robotState.y}) {st.robotState.dir}
@@ -257,7 +259,8 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
                           )}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

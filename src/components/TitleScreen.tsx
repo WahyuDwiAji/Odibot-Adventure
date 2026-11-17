@@ -10,6 +10,7 @@ import {
   VolumeX,
   ShieldCheck,
   BookOpen,
+  BookMarked,
   Palette,
   CheckCircle2,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ interface TitleScreenProps {
   onOpenDebugMode: () => void;
   onOpenSandbox: () => void;
   onOpenConceptGuide: () => void;
+  onOpenGuide?: () => void;
   onOpenGoogleLogin?: () => void;
   onOpenSkinSelector?: () => void;
   userProfile?: {
@@ -41,6 +43,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   onOpenDebugMode,
   onOpenSandbox,
   onOpenConceptGuide,
+  onOpenGuide,
   onOpenGoogleLogin,
   onOpenSkinSelector,
   userProfile,
@@ -118,6 +121,21 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                   <span className="hidden sm:inline">Masuk Google</span>
                 </>
               )}
+            </button>
+          )}
+
+          {/* Panduan Bermain Button */}
+          {onOpenGuide && (
+            <button
+              onClick={() => {
+                sounds.playClick();
+                onOpenGuide();
+              }}
+              className="flex items-center justify-center gap-1.5 min-h-[40px] px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 rounded-xl text-xs font-semibold text-cyan-200 hover:text-white transition-colors"
+              title="Panduan Menggunakan Odibot"
+            >
+              <BookMarked className="w-4 h-4 text-cyan-400" />
+              <span>Panduan</span>
             </button>
           )}
 

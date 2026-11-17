@@ -65,7 +65,9 @@ export function runSimulation(
 
   // Variables and Lists environment
   const variables: Record<string, number> = { ...(level.initialVariables || {}) };
-  const lists: Record<string, string[]> = { ...(level.initialLists || {}) };
+  const lists: Record<string, string[]> = Object.fromEntries(
+    Object.entries(level.initialLists || {}).map(([k, arr]) => [k, [...arr]])
+  );
 
   const steps: ExecutionStep[] = [];
   let executionCount = 0;
@@ -121,7 +123,23 @@ export function runSimulation(
     scope: 'MAIN' | 'F1' | 'F2',
     depth: number
   ) {
-    if (failed || executionCount >= MAX_STEPS || depth > 12) return;
+    if (failed || executionCount >= MAX_STEPS) return;
+    if (depth > 12) {
+      steps.push({
+        blockId: blocks[0]?.id || 'recursion-limit',
+        scope,
+        action: scope === 'F1' ? 'CALL_F1' : scope === 'F2' ? 'CALL_F2' : 'REPEAT',
+        robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+        crystalsCollected,
+        variablesSnapshot: { ...variables },
+        listsSnapshot: { ...lists },
+        status: 'BLOCKED',
+        message: 'Fungsi memanggil dirinya sendiri terlalu banyak (infinite recursion)!',
+      });
+      failed = true;
+      failureReason = 'Batas pemanggilan fungsi berulang tercapai! Jangan panggil F1/F2 di dalam dirinya sendiri tanpa henti.';
+      return;
+    }
 
     for (const block of blocks) {
       if (failed || executionCount >= MAX_STEPS) return;
@@ -582,11 +600,27 @@ export function runSimulation(
           const op = block.varOperator || '>';
           const targetVal = typeof block.varValue === 'number' ? block.varValue : 0;
 
-          let loopLimit = 20; // safety ceiling
+          let loopLimit = 60; // safety ceiling
           while (checkVarCondition(vName, op, targetVal) && loopLimit > 0) {
             if (failed || executionCount >= MAX_STEPS) break;
             executeBlockList(block.children, scope, depth + 1);
             loopLimit--;
+          }
+          if (!failed && loopLimit === 0 && checkVarCondition(vName, op, targetVal)) {
+            steps.push({
+              blockId: block.id,
+              scope,
+              action: 'WHILE_VAR',
+              robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+              crystalsCollected,
+              variablesSnapshot: { ...variables },
+              listsSnapshot: { ...lists },
+              status: 'BLOCKED',
+              message: `Perulangan "Selama (${vName} ${op} ${targetVal})" tidak berhenti!`,
+            });
+            failed = true;
+            failureReason = `Loop "Selama (${vName} ${op} ${targetVal})" berjalan tanpa henti! Pastikan nilai ${vName} berubah di dalam loop.`;
+            return;
           }
           break;
         }
@@ -652,11 +686,43 @@ export function runSimulation(
         }
 
         case 'CALL_F1': {
+          if (f1Blocks.length === 0) {
+            steps.push({
+              blockId: block.id,
+              scope,
+              action: 'CALL_F1',
+              robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+              crystalsCollected,
+              variablesSnapshot: { ...variables },
+              listsSnapshot: { ...lists },
+              status: 'BLOCKED',
+              message: 'Fungsi F1() masih kosong! Buka tab F1 lalu masukkan perintahnya.',
+            });
+            failed = true;
+            failureReason = 'Fungsi F1() masih kosong! Klik tab F1 di sebelah Program Utama lalu isi perintahnya.';
+            return;
+          }
           executeBlockList(f1Blocks, 'F1', depth + 1);
           break;
         }
 
         case 'CALL_F2': {
+          if (f2Blocks.length === 0) {
+            steps.push({
+              blockId: block.id,
+              scope,
+              action: 'CALL_F2',
+              robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+              crystalsCollected,
+              variablesSnapshot: { ...variables },
+              listsSnapshot: { ...lists },
+              status: 'BLOCKED',
+              message: 'Fungsi F2() masih kosong! Buka tab F2 lalu masukkan perintahnya.',
+            });
+            failed = true;
+            failureReason = 'Fungsi F2() masih kosong! Klik tab F2 di sebelah Program Utama lalu isi perintahnya.';
+            return;
+          }
           executeBlockList(f2Blocks, 'F2', depth + 1);
           break;
         }

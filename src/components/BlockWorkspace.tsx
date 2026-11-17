@@ -80,6 +80,11 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
     setActiveContainerId(null);
   }, [level.id, activeTab]);
 
+  useEffect(() => {
+    setActiveTab('MAIN');
+    setPaletteCategory('ALL');
+  }, [level.id]);
+
   const totalUsedBlocks = countTotalBlocks(mainBlocks, f1Blocks, f2Blocks);
   const [threeStarLimit, twoStarLimit] = getLevelThresholds(level);
   const is3StarEligible = totalUsedBlocks <= threeStarLimit;
@@ -1056,6 +1061,9 @@ const CHILD_COMMAND_LABELS: { type: CommandType; shortLabel: string; title: stri
   { type: 'JUMP', shortLabel: '+ Lompat', title: 'Tambah Lompat' },
   { type: 'COLLECT', shortLabel: '+ Ambil', title: 'Tambah Ambil Kristal' },
   { type: 'TOGGLE_SWITCH', shortLabel: '+ Saklar', title: 'Tambah Tekan Saklar' },
+  { type: 'READ_LIST', shortLabel: '+ List', title: 'Tambah Baca List Rute' },
+  { type: 'SET_VAR', shortLabel: '+ Set Var', title: 'Tambah Atur Variabel' },
+  { type: 'CHANGE_VAR', shortLabel: '+ Ubah Var', title: 'Tambah Ubah Variabel' },
   { type: 'IF_COLOR', shortLabel: '+ Cek Warna', title: 'Tambah Cek Warna' },
   { type: 'IF_OBSTACLE', shortLabel: '+ Halangan', title: 'Tambah Jika Halangan' },
   { type: 'IF_VAR', shortLabel: '+ Jika Nilai', title: 'Tambah Jika Nilai' },

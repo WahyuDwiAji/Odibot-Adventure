@@ -54,7 +54,9 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
   onSelectLevel,
   onClose,
 }) => {
-  const [selectedZoneId, setSelectedZoneId] = useState<string>('zone-1');
+  const initialZone =
+    ALL_LEVELS.find((l) => l.id === currentLevelId)?.zoneId || 'zone-1';
+  const [selectedZoneId, setSelectedZoneId] = useState<string>(initialZone);
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel | 'ALL'>('ALL');
 
   const selectedZone = ZONES.find((z) => z.id === selectedZoneId) || ZONES[0];

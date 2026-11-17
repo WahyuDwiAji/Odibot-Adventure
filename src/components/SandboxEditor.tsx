@@ -99,7 +99,11 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
           copy[y][x] = { type: 'COLOR_YELLOW', height: cell.height };
           break;
         case 'ERASE':
-          copy[y][x] = { type: 'EMPTY', height: 0 };
+          if (startPos.x === x && startPos.y === y) {
+            copy[y][x] = { type: 'PATH', height: 0 };
+          } else {
+            copy[y][x] = { type: 'EMPTY', height: 0 };
+          }
           break;
       }
       return copy;
@@ -110,17 +114,25 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
   const handleStartPlay = () => {
     sounds.playVictory();
 
+    const customTiles = tiles.map((row) => row.map((t) => ({ ...t })));
+
+    // Ensure robot start tile is walkable
+    if (customTiles[startPos.y]?.[startPos.x]?.type === 'EMPTY') {
+      customTiles[startPos.y][startPos.x] = { type: 'PATH', height: 0 };
+    }
+
     // Verify at least 1 goal tile
     let hasGoal = false;
-    tiles.forEach((row) => {
+    customTiles.forEach((row) => {
       row.forEach((t) => {
         if (t.type === 'GOAL') hasGoal = true;
       });
     });
 
     if (!hasGoal) {
-      // Place goal automatically if missing
-      tiles[gridSize - 1][gridSize - 1] = { type: 'GOAL', height: 0 };
+      const gx = startPos.x === gridSize - 1 && startPos.y === gridSize - 1 ? 0 : gridSize - 1;
+      const gy = startPos.x === gridSize - 1 && startPos.y === gridSize - 1 ? 0 : gridSize - 1;
+      customTiles[gy][gx] = { type: 'GOAL', height: 0 };
     }
 
     const customLevel: LevelDefinition = {
@@ -136,7 +148,7 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
       hint: 'Perhatikan rute yang kamu gambar dan susun balok perintah yang sesuai.',
       gridWidth: gridSize,
       gridHeight: gridSize,
-      tiles,
+      tiles: customTiles,
       startPos,
       startDir,
       maxBlocksFor3Stars: 10,
@@ -223,7 +235,7 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
           </div>
 
           {/* Brush Selector Buttons */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[11px] sm:text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px] sm:text-xs">
             {[
               { id: 'START_ROBOT', label: 'Robot Mulai', color: 'bg-cyan-600 text-white' },
               { id: 'PATH', label: 'Ubin Biasa', color: 'bg-slate-700 text-white' },
@@ -234,6 +246,7 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
               { id: 'SWITCH', label: 'Tombol Saklar', color: 'bg-emerald-600 text-white' },
               { id: 'HAZARD', label: 'Laser Merah', color: 'bg-rose-600 text-white' },
               { id: 'BLUE_SENSOR', label: 'Sensor Biru', color: 'bg-sky-600 text-white' },
+              { id: 'YELLOW_SENSOR', label: 'Sensor Kuning', color: 'bg-amber-500 text-slate-950 font-bold' },
               { id: 'ERASE', label: 'Hapus (Jurang)', color: 'bg-slate-900 border border-slate-700 text-slate-400' },
             ].map((tool) => (
               <button

@@ -42,6 +42,9 @@ const GoogleCloudSyncModal = lazy(() =>
 const SkinSelectorModal = lazy(() =>
   import('./components/SkinSelectorModal').then((m) => ({ default: m.SkinSelectorModal }))
 );
+const GuideModal = lazy(() =>
+  import('./components/GuideModal').then((m) => ({ default: m.GuideModal }))
+);
 
 import {
   Play,
@@ -61,6 +64,7 @@ import {
   Variable,
   HelpCircle,
   BookOpen,
+  BookMarked,
   Cloud,
   Palette,
   CheckCircle2,
@@ -142,6 +146,7 @@ export default function App() {
   const [showConceptModal, setShowConceptModal] = useState(false);
   const [showGoogleSyncModal, setShowGoogleSyncModal] = useState(false);
   const [showSkinSelectorModal, setShowSkinSelectorModal] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
   const [activeConceptTopic, setActiveConceptTopic] = useState<string | undefined>(undefined);
   const [isMuted, setIsMuted] = useState(() => sounds.getMuted());
 
@@ -228,14 +233,17 @@ export default function App() {
       const buggyF1 = level.buggySolution.f1
         ? cloneWithIds(level.buggySolution.f1, 'dbg')
         : [];
+      const buggyF2 = level.buggySolution.f2
+        ? cloneWithIds(level.buggySolution.f2, 'dbg')
+        : [];
       setMainBlocks(buggyMain);
       setF1Blocks(buggyF1);
-      setF2Blocks([]);
+      setF2Blocks(buggyF2);
       lastAutoRunSignatureRef.current = JSON.stringify({
         levelId: level.id,
         mainBlocks: buggyMain,
         f1Blocks: buggyF1,
-        f2Blocks: [],
+        f2Blocks: buggyF2,
       });
     } else {
       setMainBlocks([]);
@@ -265,7 +273,11 @@ export default function App() {
           ? cloneWithIds(currentLevel.starterBlocks.f1, 'st')
           : []
       );
-      setF2Blocks([]);
+      setF2Blocks(
+        currentLevel.starterBlocks.f2
+          ? cloneWithIds(currentLevel.starterBlocks.f2, 'st')
+          : []
+      );
       sounds.playClick();
     } else if (currentLevel.isDebuggingChallenge && currentLevel.buggySolution) {
       setMainBlocks(cloneWithIds(currentLevel.buggySolution.main, 'dbg'));
@@ -274,7 +286,11 @@ export default function App() {
           ? cloneWithIds(currentLevel.buggySolution.f1, 'dbg')
           : []
       );
-      setF2Blocks([]);
+      setF2Blocks(
+        currentLevel.buggySolution.f2
+          ? cloneWithIds(currentLevel.buggySolution.f2, 'dbg')
+          : []
+      );
       sounds.playClick();
     }
   }, [currentLevel]);
@@ -730,15 +746,12 @@ export default function App() {
           updatedTiles[robotState.y][robotState.x].hasCrystal = false;
         }
         setTiles(updatedTiles);
-        setCrystalsCollected((prev) => {
-          const nextVal = prev + 1;
-          setCurrentVariables((vars) => {
-            if (vars['kristal'] !== undefined) {
-              return { ...vars, kristal: (vars.kristal || 0) + 1 };
-            }
-            return vars;
-          });
-          return nextVal;
+        setCrystalsCollected((prev) => prev + 1);
+        setCurrentVariables((vars) => {
+          if (vars['kristal'] !== undefined) {
+            return { ...vars, kristal: (vars.kristal || 0) + 1 };
+          }
+          return vars;
         });
         checkManualVictory(robotState.x, robotState.y, updatedTiles);
       } else {
@@ -841,6 +854,11 @@ export default function App() {
       return;
     }
 
+    if (simulationTimerRef.current) {
+      clearTimeout(simulationTimerRef.current);
+      simulationTimerRef.current = null;
+    }
+
     const steps = simulationStepsRef.current;
     const idx = currentStepIndexRef.current;
     const simResult = currentSimResultRef.current;
@@ -876,12 +894,18 @@ export default function App() {
     finalizeSimulationResult,
   ]);
 
+  const hasNextLevel = useMemo(() => {
+    const currentIdx = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
+    return currentIdx !== -1 && currentIdx + 1 < ALL_LEVELS.length;
+  }, [currentLevel.id]);
+
   // Next level navigation
   const handleNextLevel = () => {
     const currentIdx = ALL_LEVELS.findIndex((l) => l.id === currentLevel.id);
     if (currentIdx !== -1 && currentIdx + 1 < ALL_LEVELS.length) {
       loadLevel(ALL_LEVELS[currentIdx + 1]);
     } else {
+      setIsVictory(false);
       setShowLevelSelect(true);
     }
   };
@@ -971,6 +995,7 @@ export default function App() {
       showConceptModal ||
       showGoogleSyncModal ||
       showSkinSelectorModal ||
+      showGuideModal ||
       isVictory;
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -987,6 +1012,7 @@ export default function App() {
       if (e.code === 'Escape') {
         if (showGoogleSyncModal) setShowGoogleSyncModal(false);
         else if (showSkinSelectorModal) setShowSkinSelectorModal(false);
+        else if (showGuideModal) setShowGuideModal(false);
         else if (showConceptModal) setShowConceptModal(false);
         else if (showLevelSelect) setShowLevelSelect(false);
         else if (showHintModal) setShowHintModal(false);
@@ -1051,6 +1077,7 @@ export default function App() {
     showConceptModal,
     showGoogleSyncModal,
     showSkinSelectorModal,
+    showGuideModal,
     isVictory,
   ]);
 
@@ -1109,6 +1136,7 @@ export default function App() {
           onOpenConceptGuide={() => {
             setShowConceptModal(true);
           }}
+          onOpenGuide={() => setShowGuideModal(true)}
           onOpenGoogleLogin={() => setShowGoogleSyncModal(true)}
           onOpenSkinSelector={() => setShowSkinSelectorModal(true)}
           userProfile={progress.userProfile}
@@ -1214,6 +1242,19 @@ export default function App() {
                   <span>Kostum</span>
                 </button>
 
+                {/* Panduan Bermain Odibot */}
+                <button
+                  onClick={() => {
+                    sounds.playClick();
+                    setShowGuideModal(true);
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 rounded-xl text-xs font-semibold text-cyan-300 hover:text-cyan-200 transition-colors min-h-[36px]"
+                  title="Panduan Menggunakan Odibot"
+                >
+                  <BookMarked className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Panduan</span>
+                </button>
+
                 {/* Pusat Konsep Koding SD Kelas 6 */}
                 <button
                   onClick={() => {
@@ -1257,6 +1298,18 @@ export default function App() {
 
                 {showMobileMoreMenu && (
                   <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1">
+                    <button
+                      onClick={() => {
+                        sounds.playClick();
+                        setShowMobileMoreMenu(false);
+                        setShowGuideModal(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 min-h-[42px] rounded-xl text-xs font-semibold hover:bg-slate-800 text-cyan-300 transition-colors text-left"
+                    >
+                      <BookMarked className="w-4 h-4 text-cyan-400" />
+                      <span>Panduan Menggunakan Odibot</span>
+                    </button>
+
                     <button
                       onClick={() => {
                         sounds.playClick();
@@ -1620,6 +1673,7 @@ export default function App() {
             )}
             onNextLevel={handleNextLevel}
             onReplay={resetLevelState}
+            hasNextLevel={hasNextLevel}
             onOpenLevelSelect={() => {
               setIsVictory(false);
               setShowLevelSelect(true);
@@ -1685,6 +1739,14 @@ export default function App() {
             totalStars={totalStars}
             onSelectSkin={handleSelectSkin}
             onClose={() => setShowSkinSelectorModal(false)}
+          />
+        )}
+
+        {/* User Guide Modal (Panduan Menggunakan Odibot) */}
+        {showGuideModal && (
+          <GuideModal
+            onClose={() => setShowGuideModal(false)}
+            onStartFirstMission={screen === 'TITLE' ? handleStartCodingMission : undefined}
           />
         )}
       </Suspense>

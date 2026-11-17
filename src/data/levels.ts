@@ -1321,7 +1321,8 @@ export const ALL_LEVELS: LevelDefinition[] = [
         { type: 'ELEVATED', height: 2, hasCrystal: true },
         { type: 'ELEVATED', height: 1 },
         { type: 'PATH', height: 0 },
-        { type: 'GOAL', height: 0 }
+        { type: 'GOAL', height: 0 },
+        { type: 'EMPTY', height: 0 }
       ],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
@@ -1567,7 +1568,8 @@ export const ALL_LEVELS: LevelDefinition[] = [
         { type: 'COLOR_BLUE', height: 0 },
         { type: 'ELEVATED', height: 1, hasCrystal: true },
         { type: 'PATH', height: 0 },
-        { type: 'GOAL', height: 0 }
+        { type: 'GOAL', height: 0 },
+        { type: 'EMPTY', height: 0 }
       ],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],
       [{ type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }, { type: 'EMPTY', height: 0 }],

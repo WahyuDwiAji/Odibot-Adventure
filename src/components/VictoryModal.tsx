@@ -14,6 +14,7 @@ interface VictoryModalProps {
   onNextLevel: () => void;
   onReplay: () => void;
   onOpenLevelSelect: () => void;
+  hasNextLevel?: boolean;
 }
 
 export const VictoryModal: React.FC<VictoryModalProps> = ({
@@ -26,6 +27,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   onNextLevel,
   onReplay,
   onOpenLevelSelect,
+  hasNextLevel = true,
 }) => {
   const [showPython, setShowPython] = useState(false);
   const [threeStarLimit, twoStarLimit] = getLevelThresholds(level);
@@ -161,7 +163,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             }}
             className="flex-1 min-h-[44px] py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20 transition-all flex items-center justify-center gap-1.5"
           >
-            <span>Misi Berikutnya</span>
+            <span>{hasNextLevel ? 'Misi Berikutnya' : 'Pilih Misi Lain'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

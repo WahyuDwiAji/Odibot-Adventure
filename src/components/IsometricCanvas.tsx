@@ -646,7 +646,16 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
             ctx.textBaseline = 'middle';
             ctx.fillText('★', screenX, screenY);
           } else if (tile.type === 'SWITCH') {
-            ctx.fillStyle = tile.isSwitchActive ? '#059669' : '#D97706';
+            ctx.fillStyle = tile.isSwitchActive ? '#059669' : '#B45309';
+            ctx.fill();
+            ctx.strokeStyle = tile.isSwitchActive ? '#6EE7B7' : '#FCD34D';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Distinct switch pad ring
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, 10, 0, Math.PI * 2);
+            ctx.fillStyle = tile.isSwitchActive ? '#10B981' : '#F59E0B';
             ctx.fill();
             ctx.strokeStyle = '#FFFFFF';
             ctx.lineWidth = 1.5;
@@ -654,19 +663,40 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           } else if (tile.type === 'HAZARD') {
             ctx.fillStyle = tile.isHazardActive ? '#DC2626' : '#334155';
             ctx.fill();
-            ctx.strokeStyle = '#EF4444';
+            ctx.strokeStyle = tile.isHazardActive ? '#FCA5A5' : '#64748B';
             ctx.lineWidth = 2;
             ctx.stroke();
+
+            if (tile.isHazardActive) {
+              ctx.beginPath();
+              ctx.moveTo(screenX - 10, screenY - 10);
+              ctx.lineTo(screenX + 10, screenY + 10);
+              ctx.moveTo(screenX + 10, screenY - 10);
+              ctx.lineTo(screenX - 10, screenY + 10);
+              ctx.strokeStyle = '#FEE2E2';
+              ctx.lineWidth = 2.5;
+              ctx.stroke();
+            }
           } else if (tile.type === 'COLOR_BLUE') {
             ctx.fillStyle = '#0284C7';
             ctx.fill();
             ctx.strokeStyle = '#38BDF8';
             ctx.lineWidth = 1.5;
             ctx.stroke();
+            ctx.beginPath();
+            ctx.rect(screenX - 7, screenY - 7, 14, 14);
+            ctx.strokeStyle = 'rgba(224, 242, 254, 0.7)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
           } else if (tile.type === 'COLOR_YELLOW') {
-            ctx.fillStyle = '#D97706';
+            ctx.fillStyle = '#CA8A04';
             ctx.fill();
-            ctx.strokeStyle = '#FBBF24';
+            ctx.strokeStyle = '#FDE047';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.rect(screenX - 7, screenY - 7, 14, 14);
+            ctx.strokeStyle = 'rgba(254, 249, 195, 0.75)';
             ctx.lineWidth = 1.5;
             ctx.stroke();
           } else {
@@ -757,9 +787,18 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
             break;
           }
           case 'SWITCH': {
-            ctx.fillStyle = tile.isSwitchActive ? '#059669' : '#D97706';
+            ctx.fillStyle = tile.isSwitchActive ? '#059669' : '#B45309';
             ctx.fill();
-            ctx.strokeStyle = '#FCD34D';
+            ctx.strokeStyle = tile.isSwitchActive ? '#6EE7B7' : '#FCD34D';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Button pad disc on top so Switch is visually distinct from Yellow Sensor
+            ctx.beginPath();
+            ctx.ellipse(screenX, screenY, w2 * 0.42, h2 * 0.42, 0, 0, Math.PI * 2);
+            ctx.fillStyle = tile.isSwitchActive ? '#10B981' : '#F59E0B';
+            ctx.fill();
+            ctx.strokeStyle = '#FFFFFF';
             ctx.lineWidth = 1.5;
             ctx.stroke();
             break;
@@ -767,9 +806,20 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           case 'HAZARD': {
             ctx.fillStyle = tile.isHazardActive ? '#DC2626' : '#374151';
             ctx.fill();
-            ctx.strokeStyle = tile.isHazardActive ? '#EF4444' : '#4B5563';
+            ctx.strokeStyle = tile.isHazardActive ? '#FCA5A5' : '#4B5563';
             ctx.lineWidth = 1.5;
             ctx.stroke();
+
+            if (tile.isHazardActive) {
+              ctx.beginPath();
+              ctx.moveTo(screenX - w2 * 0.45, screenY);
+              ctx.lineTo(screenX + w2 * 0.45, screenY);
+              ctx.moveTo(screenX, screenY - h2 * 0.45);
+              ctx.lineTo(screenX, screenY + h2 * 0.45);
+              ctx.strokeStyle = '#FEE2E2';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            }
             break;
           }
           case 'COLOR_BLUE': {
@@ -778,13 +828,33 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
             ctx.strokeStyle = '#38BDF8';
             ctx.lineWidth = 1.5;
             ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(screenX, screenY - h2 * 0.45);
+            ctx.lineTo(screenX + w2 * 0.45, screenY);
+            ctx.lineTo(screenX, screenY + h2 * 0.45);
+            ctx.lineTo(screenX - w2 * 0.45, screenY);
+            ctx.closePath();
+            ctx.strokeStyle = 'rgba(224, 242, 254, 0.7)';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
             break;
           }
           case 'COLOR_YELLOW': {
-            ctx.fillStyle = '#D97706';
+            ctx.fillStyle = '#CA8A04';
             ctx.fill();
-            ctx.strokeStyle = '#FBBF24';
+            ctx.strokeStyle = '#FDE047';
             ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(screenX, screenY - h2 * 0.45);
+            ctx.lineTo(screenX + w2 * 0.45, screenY);
+            ctx.lineTo(screenX, screenY + h2 * 0.45);
+            ctx.lineTo(screenX - w2 * 0.45, screenY);
+            ctx.closePath();
+            ctx.strokeStyle = 'rgba(254, 249, 195, 0.8)';
+            ctx.lineWidth = 1.2;
             ctx.stroke();
             break;
           }
