@@ -27,6 +27,8 @@ import {
   HelpCircle,
   Lightbulb,
   Zap,
+  Play,
+  Square,
 } from 'lucide-react';
 
 interface BlockWorkspaceProps {
@@ -43,6 +45,7 @@ interface BlockWorkspaceProps {
   autoRunEnabled?: boolean;
   onToggleAutoRun?: () => void;
   autoRunCountdown?: number | null;
+  onRunCode?: () => void;
 }
 
 type PaletteCategory = 'ALL' | 'MOTION' | 'VARIABLE' | 'LOOP' | 'LOGIC' | 'FUNCTION';
@@ -61,6 +64,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
   autoRunEnabled = false,
   onToggleAutoRun,
   autoRunCountdown = null,
+  onRunCode,
 }) => {
   const [activeTab, setActiveTab] = useState<'MAIN' | 'F1' | 'F2'>('MAIN');
   const [viewMode, setViewMode] = useState<'BLOCKS' | 'PYTHON'>('BLOCKS');
@@ -939,6 +943,33 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
 
           {/* BAGIAN KANAN: TEMPAT MENGECEK KODE (SUSUNAN BALOK ODIBOT) */}
           <div className="flex-1 sm:col-span-7 flex flex-col h-full min-h-0 bg-slate-950/80 overflow-hidden">
+            {/* Tombol Jalankan Program di atas tab Susunan Kode Odibot */}
+            {onRunCode && (
+              <div className="px-2.5 sm:px-3 py-1.5 bg-slate-950 border-b border-slate-800/80 flex items-center justify-between gap-2 shrink-0">
+                <button
+                  onClick={onRunCode}
+                  className={`flex-1 min-h-[38px] px-4 py-1.5 rounded-xl text-xs font-bold font-display flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer ${
+                    isSimulating
+                      ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/25'
+                      : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 shadow-cyan-500/20'
+                  }`}
+                  title={isSimulating ? 'Hentikan Simulasi Odibot' : 'Jalankan Program Odibot (Space)'}
+                >
+                  {isSimulating ? (
+                    <>
+                      <Square className="w-3.5 h-3.5 fill-current animate-pulse" />
+                      <span>Hentikan Program</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Jalankan Program</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
             <div className="px-3 py-2 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between shrink-0">
               <span className="text-xs font-black text-emerald-300 flex items-center gap-1.5 uppercase tracking-wider font-display">
                 <ListOrdered className="w-3.5 h-3.5 text-emerald-400" />

@@ -20,6 +20,8 @@ import { BlockWorkspace } from './components/BlockWorkspace';
 import { TitleScreen } from './components/TitleScreen';
 import { ConceptBar } from './components/ConceptBar';
 import { CyberTerminalInspector } from './components/CyberTerminalInspector';
+import { MissionWalkthrough } from './components/MissionWalkthrough';
+import { VictoryParticlesCanvas } from './components/VictoryParticlesCanvas';
 
 const VictoryModal = lazy(() =>
   import('./components/VictoryModal').then((m) => ({ default: m.VictoryModal }))
@@ -118,6 +120,8 @@ export default function App() {
     dir: Direction;
   }>({ x: 0, y: 0, height: 0, dir: 'EAST' });
   const [crystalsCollected, setCrystalsCollected] = useState(0);
+  const [crystalAnimTick, setCrystalAnimTick] = useState(0);
+  const prevCrystalsRef = useRef(0);
 
   // Live computer memory variables & lists state
   const [currentVariables, setCurrentVariables] = useState<Record<string, number>>({});
@@ -165,6 +169,20 @@ export default function App() {
   const [mobileTab, setMobileTab] = useState<'ARENA' | 'CODE'>('ARENA');
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false);
 
+  // Interactive First-Time Mission Walkthrough
+  const [walkthroughDone, setWalkthroughDone] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('odibot_walkthrough_done_v1') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const walkthroughArenaRef = useRef<HTMLDivElement | null>(null);
+  const walkthroughWorkspaceRef = useRef<HTMLDivElement | null>(null);
+  const walkthroughDesktopPlaybackRef = useRef<HTMLDivElement | null>(null);
+  const walkthroughMobileDockRef = useRef<HTMLDivElement | null>(null);
+
   // Total stars calculated across all levels
   const totalStars = Object.values(progress.completedLevels).reduce(
     (acc, curr) => acc + (curr?.stars || 0),
@@ -210,6 +228,19 @@ export default function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (crystalsCollected > prevCrystalsRef.current) {
+      setCrystalAnimTick((t) => t + 1);
+    }
+    prevCrystalsRef.current = crystalsCollected;
+  }, [crystalsCollected]);
+
+  useEffect(() => {
+    if (crystalAnimTick === 0) return;
+    const timer = setTimeout(() => setCrystalAnimTick(0), 900);
+    return () => clearTimeout(timer);
+  }, [crystalAnimTick]);
 
   // Load a level and configure initial state
   const loadLevel = useCallback((level: LevelDefinition) => {
@@ -397,6 +428,16 @@ export default function App() {
       case 'CHANGE_VAR':
         sounds.playClick();
         break;
+      case 'REPEAT':
+      case 'WHILE_VAR':
+      case 'IF_VAR':
+      case 'IF_COLOR':
+      case 'IF_OBSTACLE':
+      case 'READ_LIST':
+        if (step.status === 'SUCCESS') {
+          sounds.playThink();
+        }
+        break;
     }
 
     // Update robot position and crystals
@@ -443,6 +484,7 @@ export default function App() {
     (simResult: SimulationResult) => {
       setIsSimulating(false);
       setActiveExecutingBlockId(undefined);
+      setActiveAction(undefined);
 
       if (simResult.success) {
         triggerVictorySequence();
@@ -513,11 +555,29 @@ export default function App() {
       currentStep.status === 'OUT_OF_ENERGY'
     ) {
       setIsSimulating(false);
+      setActiveAction(undefined);
       return;
     }
 
     // Schedule next step with runner reference to prevent stale closures
-    const delay = simulationSpeed === 4 ? 130 : simulationSpeed === 2 ? 260 : 520;
+    const isLogicStep =
+      currentStep.action === 'REPEAT' ||
+      currentStep.action === 'WHILE_VAR' ||
+      currentStep.action === 'IF_VAR' ||
+      currentStep.action === 'IF_COLOR' ||
+      currentStep.action === 'IF_OBSTACLE' ||
+      currentStep.action === 'READ_LIST';
+    const delay = isLogicStep
+      ? simulationSpeed === 4
+        ? 110
+        : simulationSpeed === 2
+        ? 220
+        : 420
+      : simulationSpeed === 4
+      ? 130
+      : simulationSpeed === 2
+      ? 260
+      : 520;
     simulationTimerRef.current = setTimeout(() => {
       processNextStepRef.current(simResult, runId);
     }, delay);
@@ -813,6 +873,7 @@ export default function App() {
       simulationRunIdRef.current += 1;
       setIsSimulating(false);
       setActiveExecutingBlockId(undefined);
+      setActiveAction(undefined);
       if (simulationTimerRef.current) {
         clearTimeout(simulationTimerRef.current);
         simulationTimerRef.current = null;
@@ -1024,9 +1085,53 @@ export default function App() {
     });
   };
 
+  // Launch interactive walkthrough automatically on first mission entry
+  useEffect(() => {
+    if (
+      screen !== 'PLAYING' ||
+      walkthroughDone ||
+      showWalkthrough ||
+      showLevelSelect ||
+      showHintModal ||
+      showSandbox ||
+      showConceptModal ||
+      showGoogleSyncModal ||
+      showSkinSelectorModal ||
+      showGuideModal ||
+      isVictory
+    ) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setShowWalkthrough(true);
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [
+    screen,
+    walkthroughDone,
+    showWalkthrough,
+    showLevelSelect,
+    showHintModal,
+    showSandbox,
+    showConceptModal,
+    showGoogleSyncModal,
+    showSkinSelectorModal,
+    showGuideModal,
+    isVictory,
+  ]);
+
+  const handleCompleteWalkthrough = useCallback(() => {
+    setShowWalkthrough(false);
+    setWalkthroughDone(true);
+    try {
+      localStorage.setItem('odibot_walkthrough_done_v1', 'true');
+    } catch {}
+  }, []);
+
   // Keyboard controls (only active when no modal is blocking)
   useEffect(() => {
     const anyModalOpen =
+      showWalkthrough ||
       showLevelSelect ||
       showHintModal ||
       showSandbox ||
@@ -1116,6 +1221,7 @@ export default function App() {
     showGoogleSyncModal,
     showSkinSelectorModal,
     showGuideModal,
+    showWalkthrough,
     isVictory,
   ]);
 
@@ -1495,27 +1601,85 @@ export default function App() {
               <div className="flex items-center justify-between mb-1.5 sm:mb-2 px-0.5 text-xs text-slate-300 shrink-0 gap-2 overflow-x-auto no-scrollbar">
                 <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   {/* Crystals */}
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg whitespace-nowrap shrink-0">
+                  <div
+                    key={crystalAnimTick > 0 ? `chip-${crystalAnimTick}` : 'chip-idle'}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg whitespace-nowrap shrink-0 border transition-colors ${
+                      crystalAnimTick > 0
+                        ? 'animate-crystal-chip bg-cyan-950/90 border-cyan-400/80'
+                        : crystalsCollected >= totalCrystalsInLevel && totalCrystalsInLevel > 0
+                        ? 'bg-emerald-950/50 border-emerald-500/50'
+                        : 'bg-slate-900 border-slate-800'
+                    }`}
+                  >
                     <span className="text-amber-400 font-bold">💎 Kristal:</span>
-                    <span className="font-mono font-bold text-white tabular-nums">
-                      {crystalsCollected}/{totalCrystalsInLevel}
+                    <span className="font-mono font-bold text-white tabular-nums flex items-center gap-0.5">
+                      <span
+                        key={`num-${crystalsCollected}-${crystalAnimTick}`}
+                        className={crystalAnimTick > 0 ? 'animate-crystal-digit text-cyan-300' : ''}
+                      >
+                        {crystalsCollected}
+                      </span>
+                      <span className="text-slate-400">/</span>
+                      <span>{totalCrystalsInLevel}</span>
                     </span>
+                    {crystalAnimTick > 0 && (
+                      <span
+                        key={`plus-${crystalAnimTick}`}
+                        className="animate-crystal-plus px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950 text-[10px] font-black leading-tight"
+                      >
+                        +1
+                      </span>
+                    )}
                   </div>
 
                   {/* Variables HUD */}
-                  {Object.keys(currentVariables).length > 0 && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-teal-800/80 rounded-lg text-teal-300 whitespace-nowrap shrink-0">
-                      <Variable className="w-3.5 h-3.5 text-teal-400" />
-                      {Object.entries(currentVariables).map(([k, v]) => (
-                        <span key={k} className="font-mono font-bold text-white">
-                          {k}={v}
-                          {k === 'baterai' && (
-                            <Battery className="w-3.5 h-3.5 inline ml-1 text-cyan-400" />
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {Object.keys(currentVariables).length > 0 && (() => {
+                    const isBatteryLow =
+                      currentVariables['baterai'] !== undefined &&
+                      currentVariables['baterai'] < 2;
+                    return (
+                      <div
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg whitespace-nowrap shrink-0 border transition-colors ${
+                          isBatteryLow
+                            ? 'animate-battery-shake bg-rose-950/90 border-rose-500/90 text-rose-200 shadow-sm shadow-rose-500/25'
+                            : 'bg-slate-900 border-teal-800/80 text-teal-300'
+                        }`}
+                        title={
+                          isBatteryLow
+                            ? 'Peringatan: Sisa energi baterai robot hampir habis!'
+                            : undefined
+                        }
+                      >
+                        <Variable
+                          className={`w-3.5 h-3.5 ${
+                            isBatteryLow ? 'text-rose-400' : 'text-teal-400'
+                          }`}
+                        />
+                        {Object.entries(currentVariables).map(([k, v]) => {
+                          const isThisBatteryLow = k === 'baterai' && v < 2;
+                          return (
+                            <span
+                              key={k}
+                              className={`font-mono font-bold ${
+                                isThisBatteryLow ? 'text-rose-200' : 'text-white'
+                              }`}
+                            >
+                              {k}={v}
+                              {k === 'baterai' && (
+                                <Battery
+                                  className={`w-3.5 h-3.5 inline ml-1 ${
+                                    isThisBatteryLow
+                                      ? 'text-rose-400 animate-pulse'
+                                      : 'text-cyan-400'
+                                  }`}
+                                />
+                              )}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
 
                   {/* Data Structures (Lists) HUD */}
                   {Object.keys(currentLists).length > 0 && (
@@ -1555,7 +1719,7 @@ export default function App() {
               </div>
 
               {/* Isolated Isometric Canvas Viewport */}
-              <div className="flex-1 relative min-h-[200px] sm:min-h-[300px]">
+              <div ref={walkthroughArenaRef} className="flex-1 relative min-h-[200px] sm:min-h-[300px]">
                 <IsometricCanvas
                   level={currentLevel}
                   tiles={tiles}
@@ -1589,7 +1753,10 @@ export default function App() {
               </div>
 
               {/* Desktop Bottom Playback Bar (hidden on mobile < md) */}
-              <div className="hidden md:flex items-center justify-between mt-2 pt-1 gap-2 shrink-0">
+              <div
+                ref={walkthroughDesktopPlaybackRef}
+                className="hidden md:flex items-center justify-between mt-2 pt-1 gap-2 shrink-0"
+              >
                 <button
                   onClick={resetLevelState}
                   className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-medium transition-colors"
@@ -1641,7 +1808,10 @@ export default function App() {
             </div>
 
             {/* Right Panel: Block Workspace (Visible on mobile when mobileTab === 'CODE', always visible on md+) */}
-            <div className={`${mobileTab === 'CODE' ? 'flex' : 'hidden md:flex'} md:col-span-7 flex flex-col h-full min-h-0 overflow-hidden`}>
+            <div
+              ref={walkthroughWorkspaceRef}
+              className={`${mobileTab === 'CODE' ? 'flex' : 'hidden md:flex'} md:col-span-7 flex flex-col h-full min-h-0 overflow-hidden`}
+            >
               <BlockWorkspace
                 level={currentLevel}
                 mainBlocks={mainBlocks}
@@ -1660,12 +1830,16 @@ export default function App() {
                 autoRunEnabled={autoRunEnabled}
                 onToggleAutoRun={() => setAutoRunEnabled((prev) => !prev)}
                 autoRunCountdown={autoRunCountdown}
+                onRunCode={handleRunCode}
               />
             </div>
           </div>
 
           {/* Unified Mobile Thumb-Zone Bottom Dock (< md) — visible in BOTH Arena & Code tabs */}
-          <div className="md:hidden px-2.5 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-slate-900/95 border-t border-slate-800 flex items-center gap-2 shrink-0">
+          <div
+            ref={walkthroughMobileDockRef}
+            className="md:hidden px-2.5 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-slate-900/95 border-t border-slate-800 flex items-center gap-2 shrink-0"
+          >
             <button
               onClick={resetLevelState}
               className="min-h-[44px] min-w-[44px] px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shrink-0"
@@ -1801,9 +1975,33 @@ export default function App() {
           <GuideModal
             onClose={() => setShowGuideModal(false)}
             onStartFirstMission={screen === 'TITLE' ? handleStartCodingMission : undefined}
+            onReplayWalkthrough={() => {
+              setShowGuideModal(false);
+              if (screen !== 'PLAYING') {
+                handleStartCodingMission();
+              }
+              setTimeout(() => setShowWalkthrough(true), 120);
+            }}
           />
         )}
       </Suspense>
+
+      {/* Separate Full-Viewport Victory Particle Canvas */}
+      {screen === 'PLAYING' && isVictory && <VictoryParticlesCanvas isActive={isVictory} />}
+
+      {/* Interactive First-Time Mission Walkthrough */}
+      {screen === 'PLAYING' && showWalkthrough && (
+        <MissionWalkthrough
+          targets={{
+            arenaRef: walkthroughArenaRef,
+            workspaceRef: walkthroughWorkspaceRef,
+            desktopPlaybackRef: walkthroughDesktopPlaybackRef,
+            mobileDockRef: walkthroughMobileDockRef,
+          }}
+          onEnsureMobileTab={(tab) => setMobileTab(tab)}
+          onComplete={handleCompleteWalkthrough}
+        />
+      )}
     </div>
   );
 }

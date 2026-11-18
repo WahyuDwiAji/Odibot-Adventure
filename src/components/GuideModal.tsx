@@ -23,11 +23,16 @@ import {
 interface GuideModalProps {
   onClose: () => void;
   onStartFirstMission?: () => void;
+  onReplayWalkthrough?: () => void;
 }
 
 type GuideTab = 'START' | 'TILES' | 'LOGIC' | 'MODES';
 
-export const GuideModal: React.FC<GuideModalProps> = ({ onClose, onStartFirstMission }) => {
+export const GuideModal: React.FC<GuideModalProps> = ({
+  onClose,
+  onStartFirstMission,
+  onReplayWalkthrough,
+}) => {
   const [activeTab, setActiveTab] = useState<GuideTab>('START');
 
   const tabs: { id: GuideTab; label: string; shortLabel: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -56,16 +61,33 @@ export const GuideModal: React.FC<GuideModalProps> = ({ onClose, onStartFirstMis
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              sounds.playClick();
-              onClose();
-            }}
-            className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors shrink-0"
-            title="Tutup Panduan"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {onReplayWalkthrough && (
+              <button
+                onClick={() => {
+                  sounds.playClick();
+                  onReplayWalkthrough();
+                }}
+                className="min-h-[38px] px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                title="Mulai tur interaktif antarmuka Arena & Workspace Kode"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tur Antarmuka</span>
+                <span className="sm:hidden">Tur</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                sounds.playClick();
+                onClose();
+              }}
+              className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors shrink-0"
+              title="Tutup Panduan"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Navigation Tabs */}

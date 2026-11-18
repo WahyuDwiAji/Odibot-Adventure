@@ -130,6 +130,27 @@ class SoundSystem {
     });
   }
 
+  public playThink() {
+    this.withCtx((ctx) => {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(640, now);
+      osc.frequency.setValueAtTime(880, now + 0.035);
+
+      gain.gain.setValueAtTime(0.055, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.09);
+    });
+  }
+
   public playJump() {
     this.withCtx((ctx) => {
       const osc = ctx.createOscillator();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ExecutionStep, LevelDefinition } from '../types/game';
 import { sounds } from '../utils/audio';
 import {
@@ -43,6 +43,22 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
   const batteryVal = variables['baterai'] !== undefined ? variables['baterai'] : null;
   const maxBattery = Math.max(1, level.initialVariables?.baterai ?? 8);
   const batteryPct = batteryVal !== null ? Math.min(100, Math.max(0, (batteryVal / maxBattery) * 100)) : 0;
+  const isBatteryLow = batteryVal !== null && batteryVal < 2;
+  const [crystalAnimTick, setCrystalAnimTick] = useState(0);
+  const prevCrystalsRef = useRef(crystalsCollected);
+
+  useEffect(() => {
+    if (crystalsCollected > prevCrystalsRef.current) {
+      setCrystalAnimTick((t) => t + 1);
+    }
+    prevCrystalsRef.current = crystalsCollected;
+  }, [crystalsCollected]);
+
+  useEffect(() => {
+    if (crystalAnimTick === 0) return;
+    const timer = setTimeout(() => setCrystalAnimTick(0), 750);
+    return () => clearTimeout(timer);
+  }, [crystalAnimTick]);
 
   return (
     <div className="bg-slate-950 border border-slate-800 rounded-xl sm:rounded-2xl shadow-xl overflow-hidden">
@@ -130,13 +146,19 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
           {activeTab === 'MEMORY' && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {/* Register 1: Baterai & Energi */}
-              <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl flex flex-col justify-between">
+              <div
+                className={`p-2.5 rounded-xl flex flex-col justify-between border transition-colors ${
+                  isBatteryLow
+                    ? 'animate-battery-shake bg-rose-950/40 border-rose-500/80 shadow-sm shadow-rose-500/20'
+                    : 'bg-slate-900/80 border-slate-800'
+                }`}
+              >
                 <div className="flex items-center justify-between text-slate-400 text-[11px] mb-1">
-                  <span className="flex items-center gap-1">
-                    <Battery className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className={`flex items-center gap-1 ${isBatteryLow ? 'text-rose-300 font-bold' : ''}`}>
+                    <Battery className={`w-3.5 h-3.5 ${isBatteryLow ? 'text-rose-400 animate-pulse' : 'text-cyan-400'}`} />
                     <span>Reg. Baterai:</span>
                   </span>
-                  <span className="text-cyan-300 font-bold">
+                  <span className={`font-bold ${isBatteryLow ? 'text-rose-300' : 'text-cyan-300'}`}>
                     {batteryVal !== null ? `${batteryVal} / ${maxBattery}` : 'N/A'}
                   </span>
                 </div>
@@ -152,18 +174,32 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
                 ) : (
                   <div className="text-[10px] text-slate-500 italic">Level tanpa batas baterai</div>
                 )}
-                <div className="text-[10px] text-slate-500 mt-1">Variabel Alokasi RAM</div>
+                <div className={`text-[10px] mt-1 ${isBatteryLow ? 'text-rose-400 font-bold' : 'text-slate-500'}`}>
+                  {isBatteryLow ? '⚠ Sisa energi hampir habis!' : 'Variabel Alokasi RAM'}
+                </div>
               </div>
 
               {/* Register 2: Akumulator Kristal & Skor */}
-              <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl flex flex-col justify-between">
+              <div
+                className={`p-2.5 rounded-xl flex flex-col justify-between border transition-colors ${
+                  crystalAnimTick > 0
+                    ? 'animate-crystal-chip bg-cyan-950/35 border-cyan-400/70'
+                    : 'bg-slate-900/80 border-slate-800'
+                }`}
+              >
                 <div className="flex items-center justify-between text-slate-400 text-[11px] mb-1">
                   <span className="flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <Sparkles className={`w-3.5 h-3.5 text-amber-400 ${crystalAnimTick > 0 ? 'animate-spin' : ''}`} />
                     <span>Akumulator:</span>
                   </span>
-                  <span className="text-amber-300 font-bold">
-                    {crystalsCollected} / {totalCrystals}
+                  <span className="text-amber-300 font-bold flex items-center gap-0.5">
+                    <span
+                      key={`acc-num-${crystalsCollected}-${crystalAnimTick}`}
+                      className={crystalAnimTick > 0 ? 'animate-crystal-digit text-cyan-300' : ''}
+                    >
+                      {crystalsCollected}
+                    </span>
+                    <span>/ {totalCrystals}</span>
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-300 truncate">

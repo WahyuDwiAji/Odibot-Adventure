@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LevelDefinition } from '../types/game';
 import { sounds } from '../utils/audio';
 import { getLevelThresholds } from '../utils/codeConverter';
@@ -61,6 +61,22 @@ export const ConceptBar: React.FC<ConceptBarProps> = ({
     topicId = 'debugging';
     categoryColor = 'text-rose-400 bg-rose-500/10 border-rose-500/30';
   }
+
+  const [animTick, setAnimTick] = useState(0);
+  const prevRef = useRef(crystalsCollected);
+
+  useEffect(() => {
+    if (crystalsCollected > prevRef.current) {
+      setAnimTick((t) => t + 1);
+    }
+    prevRef.current = crystalsCollected;
+  }, [crystalsCollected]);
+
+  useEffect(() => {
+    if (animTick === 0) return;
+    const timer = setTimeout(() => setAnimTick(0), 750);
+    return () => clearTimeout(timer);
+  }, [animTick]);
 
   const allCrystalsCollected = crystalsCollected >= totalCrystalsInLevel && totalCrystalsInLevel > 0;
   const [threeStarLimit, twoStarLimit] = getLevelThresholds(level);
@@ -125,8 +141,14 @@ export const ConceptBar: React.FC<ConceptBarProps> = ({
             ) : (
               <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400" />
             )}
-            <span className="font-mono text-[11px] sm:text-xs">
-              {crystalsCollected}/{totalCrystalsInLevel}
+            <span className="font-mono text-[11px] sm:text-xs flex items-center">
+              <span
+                key={`cb-num-${crystalsCollected}-${animTick}`}
+                className={animTick > 0 ? 'animate-crystal-digit font-bold text-cyan-300' : ''}
+              >
+                {crystalsCollected}
+              </span>
+              <span>/{totalCrystalsInLevel}</span>
             </span>
           </div>
 

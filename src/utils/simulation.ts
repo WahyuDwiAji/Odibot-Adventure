@@ -574,6 +574,17 @@ export function runSimulation(
           const count = block.repeatCount || 2;
           for (let i = 0; i < count; i++) {
             if (failed || executionCount >= MAX_STEPS) break;
+            steps.push({
+              blockId: block.id,
+              scope,
+              action: 'REPEAT',
+              robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+              crystalsCollected,
+              variablesSnapshot: { ...variables },
+              listsSnapshot: { ...lists },
+              status: 'SUCCESS',
+              message: `Memproses perulangan Loop (${i + 1}/${count})...`,
+            });
             executeBlockList(block.children, scope, depth + 1);
           }
           break;
@@ -603,6 +614,17 @@ export function runSimulation(
           let loopLimit = 60; // safety ceiling
           while (checkVarCondition(vName, op, targetVal) && loopLimit > 0) {
             if (failed || executionCount >= MAX_STEPS) break;
+            steps.push({
+              blockId: block.id,
+              scope,
+              action: 'WHILE_VAR',
+              robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+              crystalsCollected,
+              variablesSnapshot: { ...variables },
+              listsSnapshot: { ...lists },
+              status: 'SUCCESS',
+              message: `Memeriksa syarat Selama (${vName} ${op} ${targetVal}) = Benar`,
+            });
             executeBlockList(block.children, scope, depth + 1);
             loopLimit--;
           }
@@ -629,8 +651,24 @@ export function runSimulation(
           const vName = block.varName || 'baterai';
           const op = block.varOperator || '>';
           const targetVal = typeof block.varValue === 'number' ? block.varValue : 0;
+          const matched = checkVarCondition(vName, op, targetVal);
+          const hasElse = Boolean(block.elseChildren && block.elseChildren.length > 0);
 
-          if (checkVarCondition(vName, op, targetVal)) {
+          steps.push({
+            blockId: block.id,
+            scope,
+            action: 'IF_VAR',
+            robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+            crystalsCollected,
+            variablesSnapshot: { ...variables },
+            listsSnapshot: { ...lists },
+            status: 'SUCCESS',
+            message: matched
+              ? `Cek (${vName} ${op} ${targetVal}): BENAR → Jalankan JIKA`
+              : `Cek (${vName} ${op} ${targetVal}): SALAH → ${hasElse ? 'Jalankan ELSE' : 'Lewati'}`,
+          });
+
+          if (matched) {
             if (block.children) {
               executeBlockList(block.children, scope, depth + 1);
             }
@@ -675,6 +713,22 @@ export function runSimulation(
           const match =
             (targetColor === 'BLUE' && tile?.type === 'COLOR_BLUE') ||
             (targetColor === 'YELLOW' && tile?.type === 'COLOR_YELLOW');
+          const hasElse = Boolean(block.elseChildren && block.elseChildren.length > 0);
+          const colorLabel = targetColor === 'BLUE' ? 'Biru' : 'Kuning';
+
+          steps.push({
+            blockId: block.id,
+            scope,
+            action: 'IF_COLOR',
+            robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+            crystalsCollected,
+            variablesSnapshot: { ...variables },
+            listsSnapshot: { ...lists },
+            status: 'SUCCESS',
+            message: match
+              ? `Sensor Warna (${colorLabel}): COCOK → Jalankan JIKA`
+              : `Sensor Warna (${colorLabel}): TIDAK → ${hasElse ? 'Jalankan ELSE' : 'Lewati'}`,
+          });
 
           if (match) {
             if (block.children) {
@@ -687,7 +741,24 @@ export function runSimulation(
         }
 
         case 'IF_OBSTACLE': {
-          if (isObstacleAhead()) {
+          const hasObstacle = isObstacleAhead();
+          const hasElse = Boolean(block.elseChildren && block.elseChildren.length > 0);
+
+          steps.push({
+            blockId: block.id,
+            scope,
+            action: 'IF_OBSTACLE',
+            robotState: { x: currentPos.x, y: currentPos.y, height: currentHeight, dir: currentDir },
+            crystalsCollected,
+            variablesSnapshot: { ...variables },
+            listsSnapshot: { ...lists },
+            status: 'SUCCESS',
+            message: hasObstacle
+              ? 'Radar Halangan: TERDETEKSI → Jalankan JIKA'
+              : `Radar Halangan: AMAN → ${hasElse ? 'Jalankan ELSE' : 'Lewati'}`,
+          });
+
+          if (hasObstacle) {
             if (block.children) {
               executeBlockList(block.children, scope, depth + 1);
             }

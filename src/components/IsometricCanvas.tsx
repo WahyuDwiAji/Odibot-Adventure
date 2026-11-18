@@ -93,6 +93,15 @@ const DIR_ANGLES: Record<Direction, number> = {
   NORTH: (Math.PI * 3) / 2,
 };
 
+const THINKING_ACTIONS = new Set([
+  'REPEAT',
+  'WHILE_VAR',
+  'IF_VAR',
+  'IF_COLOR',
+  'IF_OBSTACLE',
+  'READ_LIST',
+]);
+
 // Cross-browser safe rounded rectangle drawing
 function drawRoundRect(
   ctx: CanvasRenderingContext2D,
@@ -131,6 +140,9 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
   autoRunEnabled = false,
 }) => {
   const victoryActive = Boolean(isVictory || celebratingVictory);
+  const isThinking = Boolean(
+    isSimulating && !victoryActive && activeAction && THINKING_ACTIONS.has(activeAction)
+  );
   const activeSkin = ROBOT_SKINS.find((s) => s.id === skinId) || ROBOT_SKINS[0];
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -343,6 +355,8 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     level,
     tiles,
     isSimulating,
+    isThinking,
+    activeAction,
     victoryActive,
     zoom,
     pan,
@@ -354,6 +368,8 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     level,
     tiles,
     isSimulating,
+    isThinking,
+    activeAction,
     victoryActive,
     zoom,
     pan,
@@ -428,6 +444,8 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         level: curLevel,
         tiles: curTiles,
         isSimulating: curSimulating,
+        isThinking: curThinking,
+        activeAction: curActiveAction,
         victoryActive: curVictory,
         zoom: curZoom,
         pan: curPan,
@@ -924,7 +942,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
 
         if (curPerspective === 'TOP_DOWN') {
           // --- 2D Top-Down Kodi Rover ---
-          // Pulsing golden victory aura under robot
+          // Pulsing golden victory aura or purple/cyan thinking radar under robot
           if (curVictory) {
             const auraRadius = 18 + Math.sin(victoryElapsedRef.current * 8) * 4;
             ctx.beginPath();
@@ -932,6 +950,17 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
             ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)';
             ctx.lineWidth = 2.5;
             ctx.stroke();
+          } else if (curThinking) {
+            const thinkPulse = (Math.sin(animTimeRef.current * 10) + 1) * 0.5;
+            ctx.save();
+            ctx.rotate(animTimeRef.current * 5);
+            ctx.beginPath();
+            ctx.arc(0, 0, 19, 0, Math.PI * 1.25);
+            ctx.strokeStyle = `rgba(192, 132, 252, ${0.65 + thinkPulse * 0.35})`;
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            ctx.restore();
           }
 
           const topScale = curVictory ? 1 + vJumpCurve * 0.22 : 1;
@@ -944,7 +973,11 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           ctx.lineTo(28, -12);
           ctx.lineTo(28, 12);
           ctx.closePath();
-          ctx.fillStyle = curVictory ? 'rgba(251, 191, 36, 0.32)' : 'rgba(34, 211, 238, 0.2)';
+          ctx.fillStyle = curVictory
+            ? 'rgba(251, 191, 36, 0.32)'
+            : curThinking
+            ? 'rgba(192, 132, 252, 0.32)'
+            : 'rgba(34, 211, 238, 0.2)';
           ctx.fill();
 
           // Body chassis
@@ -952,8 +985,12 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           ctx.arc(0, 0, 14, 0, Math.PI * 2);
           ctx.fillStyle = curSkin.primaryColor;
           ctx.fill();
-          ctx.strokeStyle = curVictory ? '#FDE68A' : curSkin.visorColor;
-          ctx.lineWidth = 2;
+          ctx.strokeStyle = curVictory
+            ? '#FDE68A'
+            : curThinking
+            ? '#E879F9'
+            : curSkin.visorColor;
+          ctx.lineWidth = curThinking ? 2.5 : 2;
           ctx.stroke();
 
           // Visor Face
@@ -963,7 +1000,11 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           ctx.fill();
 
           // Glowing Eyes
-          ctx.fillStyle = curVictory ? '#FBBF24' : curSkin.visorColor;
+          ctx.fillStyle = curVictory
+            ? '#FBBF24'
+            : curThinking
+            ? '#E879F9'
+            : curSkin.visorColor;
           ctx.beginPath();
           ctx.arc(6, -3, 2, 0, Math.PI * 2);
           ctx.arc(6, 3, 2, 0, Math.PI * 2);
@@ -975,7 +1016,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           ctx.lineTo(9, -4);
           ctx.lineTo(9, 4);
           ctx.closePath();
-          ctx.fillStyle = '#F59E0B';
+          ctx.fillStyle = curThinking ? '#C084FC' : '#F59E0B';
           ctx.fill();
 
           ctx.restore();
@@ -983,13 +1024,20 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         }
 
         // --- 3D Isometric Odibot Robot ---
-        // Pulsing victory spotlight ring on tile surface
+        // Pulsing spotlight ring on tile surface (Victory gold or Thinking purple/cyan)
         if (curVictory) {
           const ringPulse = (Math.sin(victoryElapsedRef.current * 7) + 1) * 0.5;
           ctx.beginPath();
           ctx.ellipse(0, 0, 16 + ringPulse * 6, 8 + ringPulse * 3, 0, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(251, 191, 36, ${0.45 + ringPulse * 0.45})`;
           ctx.lineWidth = 2;
+          ctx.stroke();
+        } else if (curThinking) {
+          const thinkRingPulse = (Math.sin(animTimeRef.current * 9) + 1) * 0.5;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 14 + thinkRingPulse * 5, 7 + thinkRingPulse * 2.5, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(192, 132, 252, ${0.45 + thinkRingPulse * 0.45})`;
+          ctx.lineWidth = 1.8;
           ctx.stroke();
         }
 
@@ -1000,11 +1048,17 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
         ctx.fill();
 
-        const idleBob = curVictory ? 0 : Math.sin(animTimeRef.current * 4) * 1.5;
+        const idleBob = curVictory
+          ? 0
+          : curThinking
+          ? Math.sin(animTimeRef.current * 9) * 1.4
+          : Math.sin(animTimeRef.current * 4) * 1.5;
         ctx.translate(0, idleBob - victoryHopHeight);
         ctx.scale(victoryScaleX, victoryScaleY);
         if (curVictory) {
           ctx.rotate(victoryWobble * 0.5);
+        } else if (curThinking) {
+          ctx.rotate(Math.sin(animTimeRef.current * 7) * 0.045);
         }
 
         const bodyW = 24;
@@ -1033,15 +1087,39 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         drawRoundRect(ctx, -bodyW / 2, -bodyH, bodyW, bodyH, 6);
         ctx.fillStyle = curSkin.primaryColor;
         ctx.fill();
-        ctx.strokeStyle = curVictory ? '#FDE68A' : curSkin.visorColor;
-        ctx.lineWidth = curVictory ? 2 : 1.5;
+        ctx.strokeStyle = curVictory
+          ? '#FDE68A'
+          : curThinking
+          ? '#E879F9'
+          : curSkin.visorColor;
+        ctx.lineWidth = curVictory || curThinking ? 2 : 1.5;
         ctx.stroke();
 
-        // Chest badge
-        ctx.fillStyle = '#F59E0B';
-        ctx.beginPath();
-        drawRoundRect(ctx, -bodyW / 4, -bodyH + 6, bodyW / 2, 7, 2);
-        ctx.fill();
+        // Chest badge (turns into animated 3-LED CPU scanner when thinking)
+        if (curThinking) {
+          ctx.fillStyle = '#0F172A';
+          ctx.beginPath();
+          drawRoundRect(ctx, -bodyW / 4 - 1, -bodyH + 5, bodyW / 2 + 2, 8, 2);
+          ctx.fill();
+
+          const activeLed = Math.floor(animTimeRef.current * 8) % 3;
+          for (let led = 0; led < 3; led++) {
+            ctx.fillStyle =
+              led === activeLed
+                ? '#E879F9'
+                : led === (activeLed + 1) % 3
+                ? '#38BDF8'
+                : '#475569';
+            ctx.beginPath();
+            ctx.arc(-4 + led * 4, -bodyH + 9, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          ctx.fillStyle = '#F59E0B';
+          ctx.beginPath();
+          drawRoundRect(ctx, -bodyW / 4, -bodyH + 6, bodyW / 2, 7, 2);
+          ctx.fill();
+        }
 
         // Visor Face
         const headW = 26;
@@ -1052,12 +1130,17 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         drawRoundRect(ctx, -headW / 2, headY, headW, headH, 6);
         ctx.fillStyle = '#111827';
         ctx.fill();
-        ctx.strokeStyle = curVictory ? '#FBBF24' : curSkin.primaryColor;
+        ctx.strokeStyle = curVictory
+          ? '#FBBF24'
+          : curThinking
+          ? '#A855F7'
+          : curSkin.primaryColor;
         ctx.lineWidth = 2;
         ctx.stroke();
 
         const eyeOffsetRatio = Math.sin(angle);
-        const eyeXCenter = eyeOffsetRatio * 4;
+        const thinkingScanOffset = curThinking ? Math.sin(animTimeRef.current * 10) * 1.8 : 0;
+        const eyeXCenter = eyeOffsetRatio * 4 + thinkingScanOffset;
 
         r.blinkTimer -= dt;
         if (r.blinkTimer <= 0) {
@@ -1068,7 +1151,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           }
         }
 
-        ctx.fillStyle = curSkin.visorColor;
+        ctx.fillStyle = curThinking ? '#E879F9' : curSkin.visorColor;
         if (curVictory) {
           // Happy "^ ^" celebratory eyes
           ctx.strokeStyle = '#FBBF24';
@@ -1079,6 +1162,19 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           ctx.beginPath();
           ctx.arc(eyeXCenter + 4, headY + 10, 3.2, Math.PI * 1.15, Math.PI * 1.85);
           ctx.stroke();
+        } else if (curThinking) {
+          // Focused logic-scanning eyes (glowing cyan-violet bars/dots)
+          ctx.fillStyle = Math.sin(animTimeRef.current * 12) > 0 ? '#E879F9' : '#38BDF8';
+          ctx.beginPath();
+          ctx.arc(eyeXCenter - 4, headY + 8, 2.7, 0, Math.PI * 2);
+          ctx.arc(eyeXCenter + 4, headY + 8, 2.7, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(eyeXCenter - 4 + thinkingScanOffset * 0.35, headY + 7.5, 1, 0, Math.PI * 2);
+          ctx.arc(eyeXCenter + 4 + thinkingScanOffset * 0.35, headY + 7.5, 1, 0, Math.PI * 2);
+          ctx.fill();
         } else if (r.isBlinking) {
           ctx.fillRect(eyeXCenter - 6, headY + 8, 4, 1.5);
           ctx.fillRect(eyeXCenter + 2, headY + 8, 4, 1.5);
@@ -1095,21 +1191,92 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
           ctx.fill();
         }
 
-        // Antenna with pulsing light
+        // Antenna with color-changing beacon light (Violet/Cyan pulsing when thinking!)
         ctx.beginPath();
         ctx.moveTo(0, headY);
         ctx.lineTo(0, headY - 8);
-        ctx.strokeStyle = '#9CA3AF';
+        ctx.strokeStyle = curThinking ? '#C084FC' : '#9CA3AF';
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        const beaconPulse = (Math.sin(animTimeRef.current * (curVictory ? 16 : 8)) + 1) * 0.5;
+        const beaconPulse = (Math.sin(animTimeRef.current * (curVictory ? 16 : curThinking ? 14 : 8)) + 1) * 0.5;
+        if (curThinking) {
+          // Outer radiant glow & spinning loading ring around antenna lamp
+          ctx.beginPath();
+          ctx.arc(0, headY - 9, 7 + beaconPulse * 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(192, 132, 252, ${0.2 + beaconPulse * 0.22})`;
+          ctx.fill();
+
+          ctx.save();
+          ctx.translate(0, headY - 9);
+          ctx.rotate(animTimeRef.current * 6.5);
+          ctx.beginPath();
+          ctx.arc(0, 0, 6.8, 0, Math.PI * 1.25);
+          ctx.strokeStyle = '#38BDF8';
+          ctx.lineWidth = 1.6;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+          ctx.restore();
+        }
+
         ctx.beginPath();
-        ctx.arc(0, headY - 9, curVictory ? 4.5 : 3.5, 0, Math.PI * 2);
+        ctx.arc(0, headY - 9, curVictory ? 4.5 : curThinking ? 4.2 : 3.5, 0, Math.PI * 2);
         ctx.fillStyle = curVictory
           ? `rgba(16, 185, 129, ${0.85 + beaconPulse * 0.15})`
+          : curThinking
+          ? beaconPulse > 0.5
+            ? `rgba(232, 121, 249, ${0.85 + beaconPulse * 0.15})`
+            : `rgba(56, 189, 248, ${0.85 + (1 - beaconPulse) * 0.15})`
           : `rgba(251, 191, 36, ${0.8 + beaconPulse * 0.2})`;
         ctx.fill();
+
+        // Floating Thought Bubble + Loading Indicator above 3D robot when thinking
+        if (curThinking) {
+          const floatOffset = Math.sin(animTimeRef.current * 6) * 1.5;
+          const bubbleY = headY - 28 + floatOffset;
+
+          // Rising mini thought dots
+          ctx.fillStyle = 'rgba(192, 132, 252, 0.9)';
+          ctx.beginPath();
+          ctx.arc(5, headY - 15, 1.4, 0, Math.PI * 2);
+          ctx.arc(8, headY - 19, 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Thought pill background
+          ctx.beginPath();
+          drawRoundRect(ctx, -16, bubbleY - 8, 34, 15, 7);
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+          ctx.fill();
+          ctx.strokeStyle = '#C084FC';
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+
+          // Mini spinning loader arc on left inside pill
+          const isBranchLogic =
+            curActiveAction === 'IF_VAR' ||
+            curActiveAction === 'IF_COLOR' ||
+            curActiveAction === 'IF_OBSTACLE';
+          ctx.save();
+          ctx.translate(-8.5, bubbleY - 0.5);
+          ctx.rotate(animTimeRef.current * 7);
+          ctx.beginPath();
+          ctx.arc(0, 0, 3.6, 0, Math.PI * 1.35);
+          ctx.strokeStyle = isBranchLogic ? '#F59E0B' : '#38BDF8';
+          ctx.lineWidth = 1.6;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+          ctx.restore();
+
+          // 3 staggered bouncing loading dots inside thought pill
+          for (let d = 0; d < 3; d++) {
+            const dotWave = Math.sin(animTimeRef.current * 10 - d * 1.1);
+            const dotY = bubbleY - 0.5 - Math.max(0, dotWave) * 2.2;
+            ctx.beginPath();
+            ctx.arc(0 + d * 5, dotY, 1.6, 0, Math.PI * 2);
+            ctx.fillStyle = d === 0 ? '#38BDF8' : d === 1 ? '#E879F9' : '#A855F7';
+            ctx.fill();
+          }
+        }
 
         // Direction pointer
         ctx.save();
@@ -1120,7 +1287,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
         ctx.lineTo(8, -4);
         ctx.lineTo(8, 4);
         ctx.closePath();
-        ctx.fillStyle = '#F59E0B';
+        ctx.fillStyle = curThinking ? '#C084FC' : '#F59E0B';
         ctx.fill();
         ctx.restore();
 
@@ -1367,7 +1534,12 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     else if (activeAction === 'TURN_LEFT') speechText = 'Putar kiri 90 derajat...';
     else if (activeAction === 'TURN_RIGHT') speechText = 'Putar kanan 90 derajat...';
     else if (activeAction === 'COLLECT') speechText = 'Mengambil kristal energi 💎!';
-    else if (activeAction === 'REPEAT') speechText = 'Menjalankan perulangan loop...';
+    else if (activeAction === 'REPEAT') speechText = '🤔 Berpikir... memproses perulangan Loop!';
+    else if (activeAction === 'WHILE_VAR') speechText = '🤔 Berpikir... mengecek syarat Selama (While)!';
+    else if (activeAction === 'IF_VAR') speechText = '🤔 Berpikir... mengevaluasi percabangan Variabel!';
+    else if (activeAction === 'IF_COLOR') speechText = '🤔 Berpikir... memindai warna ubin (If-Else)!';
+    else if (activeAction === 'IF_OBSTACLE') speechText = '🤔 Berpikir... memindai halangan di depan!';
+    else if (activeAction === 'READ_LIST') speechText = '🤔 Berpikir... membaca daftar rute!';
     else speechText = 'Menjalankan baris perintah koding...';
   } else if (autoRunEnabled) {
     speechText = '⚡ Gerak Otomatis AKTIF! Begitu kamu selesai pasang balok, aku akan langsung jalan!';
