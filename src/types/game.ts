@@ -49,6 +49,7 @@ export interface BlockCommand {
   varOperator?: '>' | '<' | '==' | '>='; // e.g. 'baterai > 0'
   listName?: string; // e.g. 'daftar_rute', 'kunci_pintu'
   children?: BlockCommand[]; // Nested inside repeat, while, if
+  elseChildren?: BlockCommand[]; // Else branch inside if-else blocks
 }
 
 export type DifficultyLevel = 'MUDAH' | 'SEDANG' | 'SULIT' | 'MASTER';

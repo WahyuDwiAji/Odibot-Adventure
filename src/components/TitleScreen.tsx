@@ -196,7 +196,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             </text>
           </svg>
           <p className="text-xs sm:text-base text-slate-300 max-w-xl mx-auto mt-1 leading-relaxed px-2">
-            Taklukkan 60 misi koding bertingkat dari <span className="text-emerald-400 font-semibold">Mudah</span> hingga <span className="text-purple-400 font-semibold">Master</span> langsung dari HP maupun komputer.
+            Taklukkan {totalLevels} misi koding bertingkat dari <span className="text-emerald-400 font-semibold">Mudah</span> hingga <span className="text-purple-400 font-semibold">Master</span> langsung dari HP maupun komputer.
           </p>
         </div>
 
@@ -221,7 +221,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 rounded-xl font-medium text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             <Compass className="w-4 h-4 text-cyan-400" />
-            <span>Pilih Dari 60 Misi</span>
+            <span>Pilih Dari {totalLevels} Misi</span>
           </button>
         </div>
 

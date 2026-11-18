@@ -253,6 +253,96 @@ class SoundSystem {
     });
   }
 
+  // Crisp uplifting fanfare when Kodi finishes the arena (leads smoothly into star chimes)
+  public playLevelClear() {
+    this.withCtx((ctx) => {
+      const notes = [
+        { f: 523.25, t: 0, d: 0.14, v: 0.18 },    // C5
+        { f: 659.25, t: 0.09, d: 0.14, v: 0.18 }, // E5
+        { f: 783.99, t: 0.18, d: 0.16, v: 0.2 },  // G5
+        { f: 1046.5, t: 0.27, d: 0.38, v: 0.22 }, // C6
+      ];
+      const now = ctx.currentTime;
+
+      notes.forEach((n) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const start = now + n.t;
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(n.f, start);
+
+        gain.gain.setValueAtTime(n.v, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + n.d);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(start);
+        osc.stop(start + n.d + 0.02);
+      });
+    });
+  }
+
+  // Satisfying ascending chime for each star revealed 1 -> 2 -> 3
+  public playStarEarned(starIndex: 1 | 2 | 3) {
+    this.withCtx((ctx) => {
+      const now = ctx.currentTime;
+      const baseFreqs: Record<1 | 2 | 3, [number, number]> = {
+        1: [659.25, 987.77],  // E5 + B5
+        2: [783.99, 1174.66], // G5 + D6
+        3: [1046.5, 1567.98], // C6 + G6
+      };
+      const [mainFreq, overtoneFreq] = baseFreqs[starIndex];
+
+      // Main bell tone
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(mainFreq, now);
+      osc1.frequency.exponentialRampToValueAtTime(mainFreq * 1.015, now + 0.08);
+      gain1.gain.setValueAtTime(0.24, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + (starIndex === 3 ? 0.45 : 0.32));
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.48);
+
+      // Harmonic sparkle overtone
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(overtoneFreq, now + 0.035);
+      gain2.gain.setValueAtTime(0.13, now + 0.035);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + (starIndex === 3 ? 0.5 : 0.34));
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.035);
+      osc2.stop(now + 0.52);
+    });
+  }
+
+  // Warm celebratory chord shimmer when achieving all 3 stars
+  public playAllStarsComplete() {
+    this.withCtx((ctx) => {
+      const now = ctx.currentTime;
+      const chord = [1046.5, 1318.51, 1567.98, 2093.0]; // C6, E6, G6, C7
+      chord.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const start = now + idx * 0.045;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.11, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.55);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.58);
+      });
+    });
+  }
+
   public playError() {
     this.withCtx((ctx) => {
       const osc = ctx.createOscillator();

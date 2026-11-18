@@ -630,8 +630,12 @@ export function runSimulation(
           const op = block.varOperator || '>';
           const targetVal = typeof block.varValue === 'number' ? block.varValue : 0;
 
-          if (checkVarCondition(vName, op, targetVal) && block.children) {
-            executeBlockList(block.children, scope, depth + 1);
+          if (checkVarCondition(vName, op, targetVal)) {
+            if (block.children) {
+              executeBlockList(block.children, scope, depth + 1);
+            }
+          } else if (block.elseChildren && block.elseChildren.length > 0) {
+            executeBlockList(block.elseChildren, scope, depth + 1);
           }
           break;
         }
@@ -672,15 +676,23 @@ export function runSimulation(
             (targetColor === 'BLUE' && tile?.type === 'COLOR_BLUE') ||
             (targetColor === 'YELLOW' && tile?.type === 'COLOR_YELLOW');
 
-          if (match && block.children) {
-            executeBlockList(block.children, scope, depth + 1);
+          if (match) {
+            if (block.children) {
+              executeBlockList(block.children, scope, depth + 1);
+            }
+          } else if (block.elseChildren && block.elseChildren.length > 0) {
+            executeBlockList(block.elseChildren, scope, depth + 1);
           }
           break;
         }
 
         case 'IF_OBSTACLE': {
-          if (isObstacleAhead() && block.children) {
-            executeBlockList(block.children, scope, depth + 1);
+          if (isObstacleAhead()) {
+            if (block.children) {
+              executeBlockList(block.children, scope, depth + 1);
+            }
+          } else if (block.elseChildren && block.elseChildren.length > 0) {
+            executeBlockList(block.elseChildren, scope, depth + 1);
           }
           break;
         }

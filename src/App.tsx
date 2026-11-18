@@ -135,8 +135,9 @@ export default function App() {
   const [activeAction, setActiveAction] = useState<string | undefined>(undefined);
   const [simulationErrorMessage, setSimulationErrorMessage] = useState<string | null>(null);
 
-  // Victory celebration state
+  // Victory celebration state (Arena fireworks stage -> VictoryModal sequential stars)
   const [isVictory, setIsVictory] = useState(false);
+  const [showVictoryModal, setShowVictoryModal] = useState(false);
   const [starsEarned, setStarsEarned] = useState(0);
 
   // Modals
@@ -178,11 +179,37 @@ export default function App() {
   const currentSimResultRef = useRef<SimulationResult | null>(null);
   const currentStepIndexRef = useRef<number>(0);
   const simulationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const victoryModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const simulationRunIdRef = useRef<number>(0);
   const lastAutoRunSignatureRef = useRef<string>('');
   const processNextStepRef = useRef<(simResult: SimulationResult, runId: number) => void>(() => {});
   const handleRunCodeRef = useRef<() => void>(() => {});
   const isSimulatingRef = useRef<boolean>(false);
+
+  const triggerVictorySequence = useCallback(() => {
+    if (victoryModalTimerRef.current) {
+      clearTimeout(victoryModalTimerRef.current);
+      victoryModalTimerRef.current = null;
+    }
+    sounds.playLevelClear();
+    setIsVictory(true);
+    setShowVictoryModal(false);
+    victoryModalTimerRef.current = setTimeout(() => {
+      setShowVictoryModal(true);
+      victoryModalTimerRef.current = null;
+    }, 950);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (victoryModalTimerRef.current) {
+        clearTimeout(victoryModalTimerRef.current);
+      }
+      if (simulationTimerRef.current) {
+        clearTimeout(simulationTimerRef.current);
+      }
+    };
+  }, []);
 
   // Load a level and configure initial state
   const loadLevel = useCallback((level: LevelDefinition) => {
@@ -192,11 +219,16 @@ export default function App() {
     setCurrentLevel(level);
     setIsSimulating(false);
     setIsVictory(false);
+    setShowVictoryModal(false);
     setSimulationErrorMessage(null);
     setActiveExecutingBlockId(undefined);
     setActiveAction('RESET');
     setExecutionHistory([]);
 
+    if (victoryModalTimerRef.current) {
+      clearTimeout(victoryModalTimerRef.current);
+      victoryModalTimerRef.current = null;
+    }
     if (simulationTimerRef.current) {
       clearTimeout(simulationTimerRef.current);
       simulationTimerRef.current = null;
@@ -228,6 +260,7 @@ export default function App() {
           ...b,
           id: `${prefix}-${Math.random().toString(36).substring(2, 8)}`,
           children: b.children ? cloneWithIds(b.children, prefix) : undefined,
+          elseChildren: b.elseChildren ? cloneWithIds(b.elseChildren, prefix) : undefined,
         }));
       const buggyMain = cloneWithIds(level.buggySolution.main, 'dbg');
       const buggyF1 = level.buggySolution.f1
@@ -264,6 +297,7 @@ export default function App() {
         ...b,
         id: `${prefix}-${Math.random().toString(36).substring(2, 8)}`,
         children: b.children ? cloneWithIds(b.children, prefix) : undefined,
+        elseChildren: b.elseChildren ? cloneWithIds(b.elseChildren, prefix) : undefined,
       }));
 
     if (currentLevel.starterBlocks) {
@@ -301,10 +335,15 @@ export default function App() {
     setAutoRunCountdown(null);
     setIsSimulating(false);
     setIsVictory(false);
+    setShowVictoryModal(false);
     setSimulationErrorMessage(null);
     setActiveExecutingBlockId(undefined);
     setActiveAction('RESET');
 
+    if (victoryModalTimerRef.current) {
+      clearTimeout(victoryModalTimerRef.current);
+      victoryModalTimerRef.current = null;
+    }
     if (simulationTimerRef.current) {
       clearTimeout(simulationTimerRef.current);
       simulationTimerRef.current = null;
@@ -406,8 +445,7 @@ export default function App() {
       setActiveExecutingBlockId(undefined);
 
       if (simResult.success) {
-        sounds.playVictory();
-        setIsVictory(true);
+        triggerVictorySequence();
 
         const usedBlocks = countTotalBlocks(mainBlocks, f1Blocks, f2Blocks);
         const [threeStarLimit, twoStarLimit] = getLevelThresholds(currentLevel);
@@ -448,7 +486,7 @@ export default function App() {
         );
       }
     },
-    [mainBlocks, f1Blocks, f2Blocks, currentLevel]
+    [mainBlocks, f1Blocks, f2Blocks, currentLevel, triggerVictorySequence]
   );
 
   // Process next step in simulation loop
@@ -502,8 +540,7 @@ export default function App() {
       });
 
       if (remaining === 0) {
-        sounds.playVictory();
-        setIsVictory(true);
+        triggerVictorySequence();
         setStarsEarned(3);
         setProgress((prev) => {
           const prevStars = prev.completedLevels[currentLevel.id]?.stars || 0;
@@ -524,7 +561,7 @@ export default function App() {
         });
       }
     }
-  }, [currentLevel]);
+  }, [currentLevel, triggerVictorySequence]);
 
   // Direct manual walking / action handler (Kemudi Langsung via D-Pad atau Keyboard)
   const handleManualAction = useCallback((action: CommandType) => {
@@ -906,6 +943,7 @@ export default function App() {
       loadLevel(ALL_LEVELS[currentIdx + 1]);
     } else {
       setIsVictory(false);
+      setShowVictoryModal(false);
       setShowLevelSelect(true);
     }
   };
@@ -1183,17 +1221,17 @@ export default function App() {
 
             {/* Quick Action Controls in Header */}
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Primary: 60 Misi */}
+              {/* Primary: Daftar Misi */}
               <button
                 onClick={() => {
                   sounds.playClick();
                   setShowLevelSelect(true);
                 }}
                 className="flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 py-1.5 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 rounded-xl text-xs font-bold transition-colors min-h-[40px] min-w-[40px]"
-                title="Peta 60 Misi Tantangan"
+                title={`Peta ${ALL_LEVELS.length} Misi Tantangan`}
               >
                 <Compass className="w-4 h-4 text-cyan-400" />
-                <span className="hidden sm:inline">60 Misi</span>
+                <span className="hidden sm:inline">{ALL_LEVELS.length} Misi</span>
               </button>
 
               {/* Primary: Petunjuk */}
@@ -1531,6 +1569,23 @@ export default function App() {
                   autoRunCountdown={autoRunCountdown}
                   autoRunEnabled={autoRunEnabled}
                 />
+
+                {/* Pre-Modal Level Complete Arena Celebration Banner */}
+                {isVictory && !showVictoryModal && (
+                  <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center px-4 z-20 animate-in zoom-in-90 fade-in duration-300">
+                    <div className="px-5 py-2.5 rounded-2xl bg-slate-950/90 border border-amber-400/70 shadow-2xl shadow-amber-500/25 flex items-center gap-2.5 backdrop-blur-sm">
+                      <Sparkles className="w-5 h-5 text-amber-400 animate-spin" style={{ animationDuration: '2.5s' }} />
+                      <div className="text-left">
+                        <div className="text-sm sm:text-base font-black font-display text-amber-300 tracking-wide">
+                          MISI SELESAI!
+                        </div>
+                        <div className="text-[11px] text-cyan-200 font-medium">
+                          Menghitung perolehan bintang...
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Desktop Bottom Playback Bar (hidden on mobile < md) */}
@@ -1602,10 +1657,8 @@ export default function App() {
                     ? handleLoadStarterCode
                     : undefined
                 }
-                onRunCode={handleRunCode}
                 autoRunEnabled={autoRunEnabled}
                 onToggleAutoRun={() => setAutoRunEnabled((prev) => !prev)}
-                onStepOnce={handleStepOnce}
                 autoRunCountdown={autoRunCountdown}
               />
             </div>
@@ -1657,7 +1710,7 @@ export default function App() {
 
       <Suspense fallback={null}>
         {/* Victory Celebration Modal */}
-        {isVictory && (
+        {isVictory && showVictoryModal && (
           <VictoryModal
             level={currentLevel}
             starsEarned={starsEarned}
@@ -1676,6 +1729,7 @@ export default function App() {
             hasNextLevel={hasNextLevel}
             onOpenLevelSelect={() => {
               setIsVictory(false);
+              setShowVictoryModal(false);
               setShowLevelSelect(true);
             }}
           />

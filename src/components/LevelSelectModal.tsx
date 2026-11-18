@@ -93,13 +93,13 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-3.5 border-b border-slate-800 bg-slate-950/70 gap-2 shrink-0">
           <div className="min-w-0">
             <h2 className="text-sm sm:text-lg font-bold font-display text-white flex flex-wrap items-center gap-2">
-              <span className="truncate">Peta 60 Misi Odibot</span>
+              <span className="truncate">Peta {ALL_LEVELS.length} Misi Odibot</span>
               <span className="text-[11px] font-mono font-normal text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-800/80 shrink-0">
                 {totalCompleted} / {ALL_LEVELS.length} Selesai
               </span>
             </h2>
             <p className="text-[11px] sm:text-xs text-slate-400 truncate mt-0.5">
-              Setiap zona memiliki 10 variasi tantangan dari Mudah hingga Master
+              Setiap zona memiliki misi bertingkat dari Mudah hingga Master
             </p>
           </div>
           <button
@@ -117,6 +117,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
         <div className="flex items-center gap-1.5 px-3 sm:px-6 py-2 bg-slate-950/50 border-b border-slate-800 overflow-x-auto no-scrollbar shrink-0">
           {ZONES.map((zone) => {
             const isSelected = zone.id === selectedZoneId;
+            const totalInZone = ALL_LEVELS.filter((l) => l.zoneId === zone.id).length;
             const completedInZone = ALL_LEVELS.filter(
               (l) => l.zoneId === zone.id && progress.completedLevels[l.id]
             ).length;
@@ -141,7 +142,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                 <span style={{ color: zone.color }}>{getZoneIcon(zone.iconName)}</span>
                 <span>{zone.title.split(':')[0]}</span>
                 <span className="text-[10px] font-mono text-slate-400">
-                  ({completedInZone}/10)
+                  ({completedInZone}/{totalInZone})
                 </span>
               </button>
             );
@@ -153,7 +154,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
           <div className="min-w-0 w-full sm:w-auto">
             <div className="flex items-center gap-2">
               <span className="font-bold text-slate-200 truncate">{selectedZone.title}</span>
-              <span className="text-[11px] text-slate-400 shrink-0">· 10 Misi</span>
+              <span className="text-[11px] text-slate-400 shrink-0">· {zoneLevels.length} Misi</span>
             </div>
             <p className="text-slate-400 text-[11px] mt-0.5 line-clamp-2 sm:line-clamp-1">{selectedZone.description}</p>
           </div>
@@ -174,7 +175,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Semua (10)
+              Semua ({zoneLevels.length})
             </button>
             {(['MUDAH', 'SEDANG', 'SULIT', 'MASTER'] as const).map((diff) => {
               const conf = DIFFICULTY_CONFIG[diff];

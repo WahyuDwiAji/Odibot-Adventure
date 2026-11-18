@@ -25,10 +25,8 @@ import {
   BatteryCharging,
   SlidersHorizontal,
   HelpCircle,
-  Play,
   Lightbulb,
   Zap,
-  StepForward,
 } from 'lucide-react';
 
 interface BlockWorkspaceProps {
@@ -42,10 +40,8 @@ interface BlockWorkspaceProps {
   activeExecutingBlockId?: string;
   isSimulating: boolean;
   onLoadStarterCode?: () => void;
-  onRunCode?: () => void;
   autoRunEnabled?: boolean;
   onToggleAutoRun?: () => void;
-  onStepOnce?: () => void;
   autoRunCountdown?: number | null;
 }
 
@@ -62,10 +58,8 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
   activeExecutingBlockId,
   isSimulating,
   onLoadStarterCode,
-  onRunCode,
   autoRunEnabled = false,
   onToggleAutoRun,
-  onStepOnce,
   autoRunCountdown = null,
 }) => {
   const [activeTab, setActiveTab] = useState<'MAIN' | 'F1' | 'F2'>('MAIN');
@@ -74,10 +68,12 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
   const [copiedPython, setCopiedPython] = useState(false);
   const [justAddedNotice, setJustAddedNotice] = useState<string | null>(null);
   const [activeContainerId, setActiveContainerId] = useState<string | null>(null);
+  const [activeContainerBranch, setActiveContainerBranch] = useState<'THEN' | 'ELSE'>('THEN');
   const sequenceContainerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setActiveContainerId(null);
+    setActiveContainerBranch('THEN');
   }, [level.id, activeTab]);
 
   useEffect(() => {
@@ -106,6 +102,10 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
       if (item.children) {
         const found = findBlockById(item.children, targetId);
         if (found) return found;
+      }
+      if (item.elseChildren) {
+        const foundElse = findBlockById(item.elseChildren, targetId);
+        if (foundElse) return foundElse;
       }
     }
     return null;
@@ -159,7 +159,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
     };
   };
 
-  // Recursive tree update helpers
+  // Recursive tree update helpers (traverses both children and elseChildren)
   const mapBlocksRecursive = (
     list: BlockCommand[],
     targetId: string,
@@ -167,10 +167,17 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
   ): BlockCommand[] =>
     list.map((b) => {
       const updated = b.id === targetId ? updater(b) : b;
-      if (updated.children) {
+      const mappedChildren = updated.children
+        ? mapBlocksRecursive(updated.children, targetId, updater)
+        : undefined;
+      const mappedElse = updated.elseChildren
+        ? mapBlocksRecursive(updated.elseChildren, targetId, updater)
+        : undefined;
+      if (mappedChildren !== updated.children || mappedElse !== updated.elseChildren) {
         return {
           ...updated,
-          children: mapBlocksRecursive(updated.children, targetId, updater),
+          ...(mappedChildren ? { children: mappedChildren } : {}),
+          ...(mappedElse ? { elseChildren: mappedElse } : {}),
         };
       }
       return updated;
@@ -179,11 +186,11 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
   const deleteBlockRecursive = (list: BlockCommand[], targetId: string): BlockCommand[] =>
     list
       .filter((b) => b.id !== targetId)
-      .map((b) =>
-        b.children
-          ? { ...b, children: deleteBlockRecursive(b.children, targetId) }
-          : b
-      );
+      .map((b) => ({
+        ...b,
+        ...(b.children ? { children: deleteBlockRecursive(b.children, targetId) } : {}),
+        ...(b.elseChildren ? { elseChildren: deleteBlockRecursive(b.elseChildren, targetId) } : {}),
+      }));
 
   const moveSiblingRecursive = (
     list: BlockCommand[],
@@ -200,14 +207,16 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
       copy[targetIdx] = temp;
       return copy;
     }
-    return list.map((b) =>
-      b.children
-        ? { ...b, children: moveSiblingRecursive(b.children, targetId, direction) }
-        : b
-    );
+    return list.map((b) => ({
+      ...b,
+      ...(b.children ? { children: moveSiblingRecursive(b.children, targetId, direction) } : {}),
+      ...(b.elseChildren
+        ? { elseChildren: moveSiblingRecursive(b.elseChildren, targetId, direction) }
+        : {}),
+    }));
   };
 
-  // Add command to active slot (or inside activeContainerId if user is currently filling a loop/if)
+  // Add command to active slot (or inside activeContainerId THEN/ELSE if user is currently filling a loop/if)
   const handleAddCommand = (type: CommandType) => {
     if (isSimulating) return;
     sounds.playStep();
@@ -219,17 +228,25 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
     // If user is currently filling a loop/conditional and clicks a regular action or conditional, put it inside!
     // If user clicks REPEAT/WHILE_VAR from main palette, add at root so sequential loops work effortlessly and auto-target the new loop.
     if (activeContainer && !isLoopBlock) {
+      const targetBranch =
+        activeContainerBranch === 'ELSE' && activeContainer.elseChildren !== undefined
+          ? 'ELSE'
+          : 'THEN';
       setCurrentList((prev) =>
-        mapBlocksRecursive(prev, activeContainer.id, (b) => ({
-          ...b,
-          children: [...(b.children || []), newBlock],
-        }))
+        mapBlocksRecursive(prev, activeContainer.id, (b) =>
+          targetBranch === 'ELSE'
+            ? { ...b, elseChildren: [...(b.elseChildren || []), newBlock] }
+            : { ...b, children: [...(b.children || []), newBlock] }
+        )
       );
       if (isConditionalBlock) {
         setActiveContainerId(newBlock.id);
+        setActiveContainerBranch('THEN');
         setJustAddedNotice('Kondisi masuk ke blok! Isi aksinya ✨');
       } else {
-        setJustAddedNotice('Masuk ke dalam Loop/Blok! 🔁');
+        setJustAddedNotice(
+          targetBranch === 'ELSE' ? 'Masuk ke cabang ELSE! 🔀' : 'Masuk ke dalam Loop/Blok! 🔁'
+        );
       }
       setTimeout(() => setJustAddedNotice(null), 3500);
       return;
@@ -238,6 +255,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
     setCurrentList((prev) => [...prev, newBlock]);
     if (isContainerType(type)) {
       setActiveContainerId(newBlock.id);
+      setActiveContainerBranch('THEN');
       setJustAddedNotice('Mode Isi Blok aktif! Klik perintah di kiri 🔁');
     } else {
       setJustAddedNotice('Balok berhasil dipasang! 🚀');
@@ -255,22 +273,48 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
     }, 50);
   };
 
-  // Add child command into nested block (works at any nesting depth)
-  const handleAddChildCommand = (parentId: string, type: CommandType) => {
+  // Add child command into nested block THEN or ELSE branch (works at any nesting depth)
+  const handleAddChildCommand = (
+    parentId: string,
+    type: CommandType,
+    branch: 'THEN' | 'ELSE' = 'THEN'
+  ) => {
     if (isSimulating) return;
     sounds.playStep();
-    setJustAddedNotice('Balok dimasukkan ke dalam blok! ✨');
+    setJustAddedNotice(
+      branch === 'ELSE' ? 'Balok masuk ke cabang ELSE! 🔀' : 'Balok dimasukkan ke dalam blok! ✨'
+    );
     setTimeout(() => setJustAddedNotice(null), 3500);
 
     const newChild = createBlockCommand(type);
     setCurrentList((prev) =>
-      mapBlocksRecursive(prev, parentId, (b) => ({
-        ...b,
-        children: [...(b.children || []), newChild],
-      }))
+      mapBlocksRecursive(prev, parentId, (b) =>
+        branch === 'ELSE'
+          ? { ...b, elseChildren: [...(b.elseChildren || []), newChild] }
+          : { ...b, children: [...(b.children || []), newChild] }
+      )
     );
     if (isContainerType(type)) {
       setActiveContainerId(newChild.id);
+      setActiveContainerBranch('THEN');
+    }
+  };
+
+  // Toggle Else branch visibility on IF_VAR / IF_COLOR / IF_OBSTACLE
+  const handleToggleElseBranch = (id: string, enable: boolean) => {
+    if (isSimulating) return;
+    sounds.playClick();
+    setCurrentList((prev) =>
+      mapBlocksRecursive(prev, id, (b) => ({
+        ...b,
+        elseChildren: enable ? b.elseChildren || [] : undefined,
+      }))
+    );
+    if (enable) {
+      setActiveContainerId(id);
+      setActiveContainerBranch('ELSE');
+    } else if (activeContainerId === id && activeContainerBranch === 'ELSE') {
+      setActiveContainerBranch('THEN');
     }
   };
 
@@ -280,6 +324,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
     sounds.playClick();
     if (id === activeContainerId) {
       setActiveContainerId(null);
+      setActiveContainerBranch('THEN');
     }
     setCurrentList((prev) => deleteBlockRecursive(prev, id));
   };
@@ -498,9 +543,9 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* Desktop Action Ribbon: JALANKAN KODE & Auto-Run Toggle (hidden on mobile because unified bottom dock handles Run/Step) */}
+      {/* Desktop Action Ribbon: Auto-Run Toggle & Feedback Notice */}
       <div className="hidden md:flex items-center justify-between px-3 py-2 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 gap-2 shrink-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           {onToggleAutoRun && (
             <button
               onClick={() => {
@@ -515,7 +560,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
               title="Ketika aktif, program akan otomatis diuji setiap kali kamu selesai menyusun balok"
             >
               <Zap className={`w-3.5 h-3.5 ${autoRunEnabled ? 'text-amber-400 fill-amber-400 animate-pulse' : ''}`} />
-              <span>⚡ Jalan Otomatis: {autoRunEnabled ? 'AKTIF' : 'MATI'}</span>
+              <span>Jalan Otomatis: {autoRunEnabled ? 'AKTIF' : 'MATI'}</span>
             </button>
           )}
 
@@ -526,40 +571,15 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
           )}
 
           {justAddedNotice && (
-            <span className="text-[11px] bg-emerald-400 text-slate-950 font-bold px-2.5 py-0.5 rounded-full shadow">
+            <span className="text-[11px] bg-emerald-400 text-slate-950 font-bold px-2.5 py-0.5 rounded-full shadow truncate">
               {justAddedNotice}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {onStepOnce && (
-            <button
-              onClick={onStepOnce}
-              disabled={isSimulating}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-cyan-300 border border-slate-700 rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 flex items-center gap-1"
-              title="Jalankan 1 Langkah Debug"
-            >
-              <StepForward className="w-3.5 h-3.5" />
-              <span>1 Langkah</span>
-            </button>
-          )}
-
-          {onRunCode && (
-            <button
-              onClick={onRunCode}
-              className={`px-5 py-2 rounded-xl text-xs font-black font-display tracking-wider shadow-lg transition-all flex items-center gap-1.5 min-h-[40px] ${
-                isSimulating
-                  ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30 ring-2 ring-amber-400/50 animate-pulse'
-                  : 'bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-500 hover:from-emerald-300 hover:to-blue-400 text-slate-950 shadow-cyan-500/30 ring-2 ring-cyan-400/50 transform hover:scale-105 active:scale-95'
-              }`}
-              title="Jalankan Kode Program (Spasi)"
-            >
-              <Play className={`w-4 h-4 fill-current ${isSimulating ? 'animate-spin' : ''}`} />
-              <span>{isSimulating ? 'HENTIKAN' : '▶ JALANKAN'}</span>
-            </button>
-          )}
-        </div>
+        <span className="text-[11px] text-slate-500 font-mono shrink-0">
+          Spasi: Jalankan · R: Reset
+        </span>
       </div>
 
       {/* Subheader: Block Count & Action Buttons */}
@@ -935,7 +955,9 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
             {activeContainer && (
               <div className="mx-2.5 mt-2 px-3 py-2 rounded-xl bg-gradient-to-r from-purple-950 to-indigo-950 border border-amber-400/70 flex items-center justify-between gap-2 shadow-md shrink-0">
                 <div className="text-[11px] text-purple-100 leading-snug min-w-0">
-                  <span className="font-bold text-amber-300">🎯 Mengisi ke Dalam Loop/Blok:</span>{' '}
+                  <span className="font-bold text-amber-300">
+                    {activeContainerBranch === 'ELSE' ? '🔀 Mengisi Cabang ELSE (Jika Tidak):' : '🎯 Mengisi ke Dalam Loop/Blok:'}
+                  </span>{' '}
                   <span className="text-slate-200">
                     Klik perintah di palet untuk memasukkannya ke dalam{' '}
                     <strong className="text-white">
@@ -943,7 +965,9 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                         ? `Ulangi (${activeContainer.repeatCount || 3}x)`
                         : activeContainer.type === 'WHILE_VAR'
                         ? `Selama (${activeContainer.varName || 'baterai'} ${activeContainer.varOperator || '>'} ${activeContainer.varValue ?? 0})`
-                        : 'Blok Kondisi'}
+                        : activeContainerBranch === 'ELSE'
+                        ? 'Cabang Jika Tidak (Else)'
+                        : 'Blok Kondisi (Jika)'}
                     </strong>
                     .
                   </span>
@@ -952,6 +976,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                   onClick={() => {
                     sounds.playClick();
                     setActiveContainerId(null);
+                    setActiveContainerBranch('THEN');
                   }}
                   className="px-2.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] rounded-lg shrink-0 shadow transition-colors"
                 >
@@ -1003,11 +1028,19 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                       onCycleVarOperator={handleCycleVarOperator}
                       onToggleColor={handleToggleColor}
                       onAddChild={handleAddChildCommand}
+                      onToggleElseBranch={handleToggleElseBranch}
                       activeExecutingBlockId={activeExecutingBlockId}
                       activeContainerId={activeContainerId}
-                      onToggleTargetContainer={(id) => {
+                      activeContainerBranch={activeContainerBranch}
+                      onToggleTargetContainer={(id, branch = 'THEN') => {
                         sounds.playClick();
-                        setActiveContainerId((prev) => (prev === id ? null : id));
+                        if (activeContainerId === id && activeContainerBranch === branch) {
+                          setActiveContainerId(null);
+                          setActiveContainerBranch('THEN');
+                        } else {
+                          setActiveContainerId(id);
+                          setActiveContainerBranch(branch);
+                        }
                       }}
                     />
                   ))}
@@ -1017,10 +1050,11 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                       onClick={() => {
                         sounds.playClick();
                         setActiveContainerId(null);
+                        setActiveContainerBranch('THEN');
                       }}
                       className="w-full py-2 px-3 rounded-xl border border-dashed border-cyan-500/50 bg-cyan-950/30 hover:bg-cyan-950/60 text-cyan-300 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
                     >
-                      <span>↳ Selesai Isi Loop — Tambah Balok Selanjutnya di Luar</span>
+                      <span>↳ Selesai Isi Blok — Tambah Balok Selanjutnya di Luar</span>
                     </button>
                   )}
                 </>
@@ -1048,10 +1082,12 @@ interface BlockCardProps {
   onAdjustVarValue: (id: string, delta: number) => void;
   onCycleVarOperator: (id: string) => void;
   onToggleColor: (id: string) => void;
-  onAddChild: (parentId: string, type: CommandType) => void;
+  onAddChild: (parentId: string, type: CommandType, branch?: 'THEN' | 'ELSE') => void;
+  onToggleElseBranch: (id: string, enable: boolean) => void;
   activeExecutingBlockId?: string;
   activeContainerId: string | null;
-  onToggleTargetContainer: (id: string) => void;
+  activeContainerBranch: 'THEN' | 'ELSE';
+  onToggleTargetContainer: (id: string, branch?: 'THEN' | 'ELSE') => void;
 }
 
 const CHILD_COMMAND_LABELS: { type: CommandType; shortLabel: string; title: string }[] = [
@@ -1087,8 +1123,10 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
   onCycleVarOperator,
   onToggleColor,
   onAddChild,
+  onToggleElseBranch,
   activeExecutingBlockId,
   activeContainerId,
+  activeContainerBranch,
   onToggleTargetContainer,
 }) => {
   const isLoop = block.type === 'REPEAT';
@@ -1096,8 +1134,12 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
   const isIfVar = block.type === 'IF_VAR';
   const isIfColor = block.type === 'IF_COLOR';
   const isIfObstacle = block.type === 'IF_OBSTACLE';
-  const isContainer = isLoop || isWhileVar || isIfVar || isIfColor || isIfObstacle;
-  const isTargeted = isContainer && activeContainerId === block.id;
+  const isConditional = isIfVar || isIfColor || isIfObstacle;
+  const isContainer = isLoop || isWhileVar || isConditional;
+  const isTargetedThen = isContainer && activeContainerId === block.id && activeContainerBranch === 'THEN';
+  const isTargetedElse = isConditional && activeContainerId === block.id && activeContainerBranch === 'ELSE';
+  const isTargeted = isTargetedThen || isTargetedElse;
+  const hasElseBranch = isConditional && block.elseChildren !== undefined;
 
   let bgStyle = 'bg-blue-600 text-white';
   let label = 'Perintah';
@@ -1273,6 +1315,17 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
             </button>
           )}
 
+          {isConditional && !hasElseBranch && (
+            <button
+              onClick={() => onToggleElseBranch(block.id, true)}
+              disabled={isSimulating}
+              className="text-[10px] font-bold px-2 py-1 bg-amber-300 text-slate-950 hover:bg-amber-200 rounded-lg mr-0.5 transition-colors shadow-sm"
+              title="Tambahkan cabang Jika Tidak (Else)"
+            >
+              + Else
+            </button>
+          )}
+
           <button
             onClick={() => onMove(block.id, 'UP')}
             disabled={isSimulating || index === 0}
@@ -1300,29 +1353,29 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
         </div>
       </div>
 
-      {/* Nested Body for Containers (Repeat / While / If) */}
+      {/* Nested Body for Containers (Repeat / While / If THEN branch) */}
       {isContainer && (
         <div className="mt-2.5 pl-2.5 border-l-2 border-white/40 space-y-2 bg-black/25 p-2 rounded-lg">
           <div className="text-[11px] sm:text-[10px] font-semibold opacity-95 flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span>Isi perintah di dalam blok:</span>
+              <span>{isConditional ? 'JIKA Benar (Then):' : 'Isi perintah di dalam blok:'}</span>
               <button
-                onClick={() => onToggleTargetContainer(block.id)}
+                onClick={() => onToggleTargetContainer(block.id, 'THEN')}
                 disabled={isSimulating}
                 className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors ${
-                  isTargeted
+                  isTargetedThen
                     ? 'bg-amber-400 text-slate-950 shadow'
                     : 'bg-white/15 hover:bg-white/25 text-white'
                 }`}
               >
-                {isTargeted ? '🎯 Sedang Diisi (Klik untuk Selesai)' : '+ Isi dari Palet Kiri'}
+                {isTargetedThen ? '🎯 Sedang Diisi (Klik untuk Selesai)' : '+ Isi dari Palet Kiri'}
               </button>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
               {availableChildActions.map((act) => (
                 <button
                   key={act.type}
-                  onClick={() => onAddChild(block.id, act.type)}
+                  onClick={() => onAddChild(block.id, act.type, 'THEN')}
                   disabled={isSimulating}
                   className="px-2.5 py-1.5 sm:px-2 sm:py-1 min-h-[34px] sm:min-h-0 bg-white/25 hover:bg-white/40 border border-white/25 active:scale-95 rounded-lg sm:rounded text-[11px] sm:text-[10px] font-bold transition-colors disabled:opacity-40"
                   title={act.title}
@@ -1352,15 +1405,96 @@ const BlockCard: React.FC<BlockCardProps> = React.memo(({
                   onCycleVarOperator={onCycleVarOperator}
                   onToggleColor={onToggleColor}
                   onAddChild={onAddChild}
+                  onToggleElseBranch={onToggleElseBranch}
                   activeExecutingBlockId={activeExecutingBlockId}
                   activeContainerId={activeContainerId}
+                  activeContainerBranch={activeContainerBranch}
                   onToggleTargetContainer={onToggleTargetContainer}
                 />
               ))}
             </div>
           ) : (
             <div className="text-[11px] text-amber-200 font-medium py-1.5 px-2 rounded bg-amber-500/15 border border-amber-400/30">
-              ⚠️ Blok loop masih kosong — klik tombol <strong>+</strong> di atas atau balok di palet kiri untuk mengisinya!
+              ⚠️ {isConditional ? 'Cabang Jika masih kosong' : 'Blok loop masih kosong'} — klik tombol <strong>+</strong> di atas atau balok di palet kiri untuk mengisinya!
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Nested ELSE Branch for Conditionals (If-Else) */}
+      {hasElseBranch && (
+        <div className="mt-2 pl-2.5 border-l-2 border-amber-300/80 space-y-2 bg-slate-950/45 p-2 rounded-lg">
+          <div className="text-[11px] sm:text-[10px] font-semibold opacity-95 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-amber-200 font-bold">JIKA TIDAK (Else):</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onToggleTargetContainer(block.id, 'ELSE')}
+                  disabled={isSimulating}
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors ${
+                    isTargetedElse
+                      ? 'bg-amber-400 text-slate-950 shadow'
+                      : 'bg-white/15 hover:bg-white/25 text-white'
+                  }`}
+                >
+                  {isTargetedElse ? '🎯 Isi Else Aktif' : '+ Isi Else dari Palet'}
+                </button>
+                <button
+                  onClick={() => onToggleElseBranch(block.id, false)}
+                  disabled={isSimulating}
+                  className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-rose-500/25 hover:bg-rose-500/45 text-rose-200 transition-colors"
+                  title="Hapus cabang Else"
+                >
+                  Hapus Else
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {availableChildActions.map((act) => (
+                <button
+                  key={`else-${act.type}`}
+                  onClick={() => onAddChild(block.id, act.type, 'ELSE')}
+                  disabled={isSimulating}
+                  className="px-2.5 py-1.5 sm:px-2 sm:py-1 min-h-[34px] sm:min-h-0 bg-amber-400/20 hover:bg-amber-400/35 border border-amber-300/30 active:scale-95 rounded-lg sm:rounded text-[11px] sm:text-[10px] font-bold text-amber-100 transition-colors disabled:opacity-40"
+                  title={`${act.title} ke cabang Else`}
+                >
+                  {act.shortLabel}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {block.elseChildren && block.elseChildren.length > 0 ? (
+            <div className="space-y-1.5">
+              {block.elseChildren.map((child, cIdx) => (
+                <BlockCard
+                  key={child.id}
+                  block={child}
+                  index={cIdx}
+                  total={block.elseChildren?.length || 0}
+                  level={level}
+                  depth={depth + 1}
+                  isActive={child.id === activeExecutingBlockId}
+                  isSimulating={isSimulating}
+                  onDelete={onDelete}
+                  onMove={onMove}
+                  onAdjustRepeat={onAdjustRepeat}
+                  onAdjustVarValue={onAdjustVarValue}
+                  onCycleVarOperator={onCycleVarOperator}
+                  onToggleColor={onToggleColor}
+                  onAddChild={onAddChild}
+                  onToggleElseBranch={onToggleElseBranch}
+                  activeExecutingBlockId={activeExecutingBlockId}
+                  activeContainerId={activeContainerId}
+                  activeContainerBranch={activeContainerBranch}
+                  onToggleTargetContainer={onToggleTargetContainer}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-[11px] text-amber-200 font-medium py-1.5 px-2 rounded bg-amber-500/15 border border-amber-400/30">
+              Cabang Else kosong — isi perintah alternatif saat kondisi bernilai Salah!
             </div>
           )}
         </div>

@@ -343,7 +343,7 @@ export const GuideModal: React.FC<GuideModalProps> = ({ onClose, onStartFirstMis
                     <span>Sensor Kondisi (Cek Warna, Halangan &amp; Jika Nilai)</span>
                   </div>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Gunakan <strong>🎨 Cek Warna</strong> (klik label <em>Ubin Biru / Ubin Kuning</em> untuk mengganti target), <strong>🚧 Jika Halangan</strong> (aktif saat ada tebing, jurang, atau laser tepat di depan robot), atau <strong>❓ Jika Nilai</strong> (membandingkan variabel seperti <code>baterai &gt; 3</code>). Kombinasikan dengan <em>Loop</em> agar Kodi berjalan cerdas menelusuri peta!
+                    Gunakan <strong>🎨 Cek Warna</strong> (klik label <em>Ubin Biru / Ubin Kuning</em> untuk mengganti target), <strong>🚧 Jika Halangan</strong> (aktif saat ada tebing, jurang, atau laser tepat di depan robot), atau <strong>❓ Jika Nilai</strong> (membandingkan variabel seperti <code>baterai &gt; 3</code>). Klik tombol <strong>+ Else</strong> pada balok kondisi untuk menambahkan jalur alternatif saat syarat tidak terpenuhi!
                   </p>
                 </div>
               </div>

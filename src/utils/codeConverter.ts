@@ -108,6 +108,12 @@ export function blocksToPython(
         } else {
           res.push(`${indent(depth + 1)}pass`);
         }
+        if (block.elseChildren && block.elseChildren.length > 0) {
+          res.push(`${ind}else:`);
+          block.elseChildren.forEach((child) => {
+            res.push(...serializeBlock(child, depth + 1));
+          });
+        }
         break;
       }
       case 'READ_LIST': {
@@ -139,6 +145,12 @@ export function blocksToPython(
         } else {
           res.push(`${indent(depth + 1)}pass`);
         }
+        if (block.elseChildren && block.elseChildren.length > 0) {
+          res.push(`${ind}else:`);
+          block.elseChildren.forEach((child) => {
+            res.push(...serializeBlock(child, depth + 1));
+          });
+        }
         break;
       }
       case 'IF_OBSTACLE': {
@@ -149,6 +161,12 @@ export function blocksToPython(
           });
         } else {
           res.push(`${indent(depth + 1)}pass`);
+        }
+        if (block.elseChildren && block.elseChildren.length > 0) {
+          res.push(`${ind}else:`);
+          block.elseChildren.forEach((child) => {
+            res.push(...serializeBlock(child, depth + 1));
+          });
         }
         break;
       }
@@ -207,6 +225,9 @@ export function countTotalBlocks(
       count += 1;
       if (item.children) {
         count += countList(item.children);
+      }
+      if (item.elseChildren) {
+        count += countList(item.elseChildren);
       }
     }
     return count;

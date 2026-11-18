@@ -51,3 +51,53 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.5);
 }
+
+@keyframes starPopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.25) rotate(-18deg);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.28) rotate(8deg);
+  }
+  80% {
+    transform: scale(0.92) rotate(-3deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes starRingBurst {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.75);
+  }
+}
+
+@keyframes shimmerSlide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.animate-star-pop {
+  animation: starPopIn 0.52s cubic-bezier(0.22, 1.35, 0.36, 1) forwards;
+}
+
+.animate-star-ring {
+  animation: starRingBurst 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-shimmer-slide {
+  animation: shimmerSlide 1.4s ease-in-out infinite;
+}
