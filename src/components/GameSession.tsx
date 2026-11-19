@@ -48,6 +48,9 @@ const VictoryModal = lazy(loadVictoryModalFromPreload);
 const LevelSelectModal = lazy(loadLevelSelectModal);
 const HintModal = lazy(loadHintModal);
 const SandboxEditor = lazy(loadSandboxEditor);
+const LevelTipsModal = lazy(() =>
+  import('./LevelTipsModal').then((m) => ({ default: m.LevelTipsModal }))
+);
 
 function loadVictoryModalFromPreload() {
   return import('./VictoryModal').then((m) => ({ default: m.VictoryModal }));
@@ -167,6 +170,9 @@ export const GameSession: React.FC<GameSessionProps> = ({
   const [showLevelSelect, setShowLevelSelect] = useState(false);
   const [showHintModal, setShowHintModal] = useState(false);
   const [showSandbox, setShowSandbox] = useState(false);
+  const [showLevelTips, setShowLevelTips] = useState(false);
+  const [levelFailureCount, setLevelFailureCount] = useState(0);
+  const [lastFailureReason, setLastFailureReason] = useState<string | null>(null);
 
   // Auto-Run (Jalan Otomatis) State & Countdown
   const [autoRunEnabled, setAutoRunEnabled] = useState<boolean>(() => {
@@ -224,6 +230,9 @@ export const GameSession: React.FC<GameSessionProps> = ({
   const isSimulatingRef = useRef<boolean>(false);
   const levelStartTimeRef = useRef<number>(Date.now());
   const levelAttemptsRef = useRef<number>(0);
+  const levelFailureCountRef = useRef<number>(0);
+  const runFailureRecordedRef = useRef<boolean>(false);
+  const tipsAutoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressRef = useRef<UserProgress>(progress);
   progressRef.current = progress;
 
@@ -231,11 +240,41 @@ export const GameSession: React.FC<GameSessionProps> = ({
     prefetchPlayingModals();
   }, []);
 
+  const recordLevelFailure = useCallback((reason?: string) => {
+    if (runFailureRecordedRef.current) return;
+    runFailureRecordedRef.current = true;
+
+    const next = levelFailureCountRef.current + 1;
+    levelFailureCountRef.current = next;
+    setLevelFailureCount(next);
+    if (reason) {
+      setLastFailureReason(reason);
+    }
+
+    if (next === 3) {
+      if (tipsAutoOpenTimerRef.current) {
+        clearTimeout(tipsAutoOpenTimerRef.current);
+      }
+      tipsAutoOpenTimerRef.current = setTimeout(() => {
+        setShowLevelTips(true);
+        tipsAutoOpenTimerRef.current = null;
+      }, 480);
+    }
+  }, []);
+
   const triggerVictorySequence = useCallback(() => {
     if (victoryModalTimerRef.current) {
       clearTimeout(victoryModalTimerRef.current);
       victoryModalTimerRef.current = null;
     }
+    if (tipsAutoOpenTimerRef.current) {
+      clearTimeout(tipsAutoOpenTimerRef.current);
+      tipsAutoOpenTimerRef.current = null;
+    }
+    levelFailureCountRef.current = 0;
+    setLevelFailureCount(0);
+    setLastFailureReason(null);
+    setShowLevelTips(false);
     sounds.playLevelClear();
     setIsVictory(true);
     setShowVictoryModal(false);
@@ -252,6 +291,9 @@ export const GameSession: React.FC<GameSessionProps> = ({
       }
       if (simulationTimerRef.current) {
         clearTimeout(simulationTimerRef.current);
+      }
+      if (tipsAutoOpenTimerRef.current) {
+        clearTimeout(tipsAutoOpenTimerRef.current);
       }
     };
   }, []);
@@ -275,6 +317,15 @@ export const GameSession: React.FC<GameSessionProps> = ({
     lastAutoRunSignatureRef.current = '';
     levelStartTimeRef.current = Date.now();
     levelAttemptsRef.current = 0;
+    levelFailureCountRef.current = 0;
+    runFailureRecordedRef.current = false;
+    if (tipsAutoOpenTimerRef.current) {
+      clearTimeout(tipsAutoOpenTimerRef.current);
+      tipsAutoOpenTimerRef.current = null;
+    }
+    setLevelFailureCount(0);
+    setLastFailureReason(null);
+    setShowLevelTips(false);
     setAutoRunCountdown(null);
     setCurrentLevel(level);
     setIsSimulating(false);
@@ -651,13 +702,22 @@ export const GameSession: React.FC<GameSessionProps> = ({
         setStarsEarned(stars);
         recordLevelVictory(stars, usedBlocks);
       } else {
+        const failReason =
+          simResult.failureReason || 'Misi belum berhasil. Periksa kembali logika kodingmu!';
         sounds.playError();
-        setSimulationErrorMessage(
-          simResult.failureReason || 'Misi belum berhasil. Periksa kembali logika kodingmu!'
-        );
+        setSimulationErrorMessage(failReason);
+        recordLevelFailure(failReason);
       }
     },
-    [mainBlocks, f1Blocks, f2Blocks, currentLevel, triggerVictorySequence, recordLevelVictory]
+    [
+      mainBlocks,
+      f1Blocks,
+      f2Blocks,
+      currentLevel,
+      triggerVictorySequence,
+      recordLevelVictory,
+      recordLevelFailure,
+    ]
   );
 
   const processNextStep = useCallback((simResult: SimulationResult, runId: number) => {
@@ -683,6 +743,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
     ) {
       setIsSimulating(false);
       setActiveAction(undefined);
+      recordLevelFailure(currentStep.message || 'Pergerakan robot terhenti!');
       return;
     }
 
@@ -707,7 +768,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
     simulationTimerRef.current = setTimeout(() => {
       processNextStepRef.current(simResult, runId);
     }, delay);
-  }, [simulationSpeed, executeStep, finalizeSimulationResult]);
+  }, [simulationSpeed, executeStep, finalizeSimulationResult, recordLevelFailure]);
 
   useEffect(() => {
     processNextStepRef.current = processNextStep;
@@ -989,6 +1050,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
     }
 
     levelAttemptsRef.current += 1;
+    runFailureRecordedRef.current = false;
     const simResult = runSimulation(currentLevel, mainBlocks, f1Blocks, f2Blocks);
     const runId = ++simulationRunIdRef.current;
     currentSimResultRef.current = simResult;
@@ -1019,6 +1081,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
       }
       resetLevelState();
       levelAttemptsRef.current += 1;
+      runFailureRecordedRef.current = false;
       const simResult = runSimulation(currentLevel, mainBlocks, f1Blocks, f2Blocks);
       const runId = ++simulationRunIdRef.current;
       currentSimResultRef.current = simResult;
@@ -1040,6 +1103,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
             step0.status === 'OUT_OF_ENERGY'
           ) {
             setIsSimulating(false);
+            recordLevelFailure(step0.message || 'Pergerakan robot terhenti!');
           } else if (simResult.steps.length === 1) {
             finalizeSimulationResult(simResult);
           }
@@ -1070,6 +1134,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
         step.status === 'OUT_OF_ENERGY'
       ) {
         setIsSimulating(false);
+        recordLevelFailure(step.message || 'Pergerakan robot terhenti!');
       } else if (idx + 1 >= steps.length && simResult) {
         finalizeSimulationResult(simResult);
       }
@@ -1088,6 +1153,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
     resetLevelState,
     executeStep,
     finalizeSimulationResult,
+    recordLevelFailure,
   ]);
 
   const hasNextLevel = useMemo(() => {
@@ -1173,6 +1239,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
   const anyModalOpen =
     showWalkthrough ||
     activeFeatureGuides.length > 0 ||
+    showLevelTips ||
     showLevelSelect ||
     showHintModal ||
     showSandbox ||
@@ -1254,7 +1321,8 @@ export const GameSession: React.FC<GameSessionProps> = ({
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       if (e.code === 'Escape') {
-        if (showLevelSelect) setShowLevelSelect(false);
+        if (showLevelTips) setShowLevelTips(false);
+        else if (showLevelSelect) setShowLevelSelect(false);
         else if (showHintModal) setShowHintModal(false);
         else if (showSandbox) setShowSandbox(false);
         return;
@@ -1301,6 +1369,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
     handleRunCode,
     resetLevelState,
     handleManualAction,
+    showLevelTips,
     showLevelSelect,
     showHintModal,
     showSandbox,
@@ -1351,6 +1420,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
     showLevelSelect ||
     showHintModal ||
     showSandbox ||
+    showLevelTips ||
     externalModalOpen ||
     showWalkthrough ||
     activeFeatureGuides.length > 0;
@@ -1633,6 +1703,9 @@ export const GameSession: React.FC<GameSessionProps> = ({
           levelFeatureGuides.length > 0 ? handleOpenCurrentFeatureGuides : undefined
         }
         featureGuideLabel={featureGuideLabel}
+        onOpenLevelTips={
+          levelFailureCount >= 3 ? () => setShowLevelTips(true) : undefined
+        }
         onLoadStarterCode={starterCodeHandler}
         isSimulating={isSimulating}
       />
@@ -1645,6 +1718,18 @@ export const GameSession: React.FC<GameSessionProps> = ({
             <span className="leading-snug">{simulationErrorMessage}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            {levelFailureCount >= 3 && (
+              <button
+                onClick={() => {
+                  sounds.playClick();
+                  setShowLevelTips(true);
+                }}
+                className="px-2.5 py-1.5 min-h-[34px] bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-bold text-xs transition-colors flex items-center gap-1"
+              >
+                <Lightbulb className="w-3.5 h-3.5" />
+                <span>Tips Level</span>
+              </button>
+            )}
             {currentLevel.starterBlocks && (
               <button
                 onClick={handleLoadStarterCode}
@@ -2025,6 +2110,16 @@ export const GameSession: React.FC<GameSessionProps> = ({
               loadLevel(lvl);
             }}
             onClose={() => setShowSandbox(false)}
+          />
+        )}
+
+        {showLevelTips && (
+          <LevelTipsModal
+            level={currentLevel}
+            failureCount={Math.max(3, levelFailureCount)}
+            lastFailureReason={lastFailureReason}
+            onLoadStarterCode={starterCodeHandler}
+            onClose={() => setShowLevelTips(false)}
           />
         )}
       </Suspense>

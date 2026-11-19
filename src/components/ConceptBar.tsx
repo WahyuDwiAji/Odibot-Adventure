@@ -14,6 +14,7 @@ import {
   GitBranch,
   Bug,
   BookOpen,
+  Lightbulb,
 } from 'lucide-react';
 
 interface ConceptBarProps {
@@ -24,6 +25,7 @@ interface ConceptBarProps {
   onOpenConceptModal: (zoneId?: string) => void;
   onOpenFeatureGuide?: () => void;
   featureGuideLabel?: string;
+  onOpenLevelTips?: () => void;
   onLoadStarterCode?: () => void;
   isSimulating: boolean;
 }
@@ -36,6 +38,7 @@ export const ConceptBar: React.FC<ConceptBarProps> = React.memo(({
   onOpenConceptModal,
   onOpenFeatureGuide,
   featureGuideLabel,
+  onOpenLevelTips,
   onLoadStarterCode,
   isSimulating,
 }) => {
@@ -123,6 +126,19 @@ export const ConceptBar: React.FC<ConceptBarProps> = React.memo(({
               >
                 <Sparkles className="w-3 h-3 text-emerald-400" />
                 <span>{featureGuideLabel || 'Cara Pakai'}</span>
+              </button>
+            )}
+            {onOpenLevelTips && (
+              <button
+                onClick={() => {
+                  sounds.playClick();
+                  onOpenLevelTips();
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 hover:text-amber-200 bg-amber-950/80 hover:bg-amber-900/80 px-2 py-0.5 rounded-lg border border-amber-700/80 transition-colors shrink-0 min-h-[28px]"
+                title="Buka Tips Level langkah demi langkah untuk konsep misi ini"
+              >
+                <Lightbulb className="w-3 h-3 text-amber-400" />
+                <span>Tips Level</span>
               </button>
             )}
             {level.realWorldCS && (
