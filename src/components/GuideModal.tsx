@@ -43,7 +43,7 @@ export const GuideModal: React.FC<GuideModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-slate-950/92 animate-in fade-in duration-150">
       <div className="relative w-full max-w-4xl max-h-[92dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800 bg-slate-950/80 shrink-0 gap-2">
@@ -349,14 +349,22 @@ export const GuideModal: React.FC<GuideModalProps> = ({
                   </p>
                 </div>
 
-                <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
+                <div className="p-3.5 bg-emerald-950/25 border border-emerald-700/50 rounded-xl space-y-2">
                   <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
                     <Boxes className="w-4 h-4 text-emerald-400" />
-                    <span>Fungsi Modular F1 &amp; F2 (Sektor 4)</span>
+                    <span>Cara Menggunakan Fungsi F1 &amp; F2 (Sektor 4)</span>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Klik tab <strong>F1</strong> atau <strong>F2</strong> di atas area susunan kode untuk membuat rangkaian jurus berulang (misal naik-ambil-turun), lalu panggil berkali-kali dari <strong>Program Utama</strong> dengan <code>⚙️ Panggil F1()</code>.
-                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-xs text-slate-200 leading-relaxed">
+                    <li>
+                      Klik tab hijau <strong className="text-emerald-300">F1</strong> (atau <strong className="text-purple-300">F2</strong>) di bagian atas area susunan kode.
+                    </li>
+                    <li>
+                      Isi dengan paket perintah berulang (misal <em>Lompat ➔ Ambil Kristal ➔ Lompat</em>).
+                    </li>
+                    <li>
+                      Kembali ke tab <strong className="text-white">Program Utama</strong> lalu klik <code className="px-1.5 py-0.5 bg-slate-800 rounded text-emerald-300">⚙️ Panggil F1()</code> di palet. Jangan panggil <em>F1()</em> di dalam tab <em>F1</em> sendiri!
+                    </li>
+                  </ol>
                 </div>
 
                 <div className="sm:col-span-2 p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">

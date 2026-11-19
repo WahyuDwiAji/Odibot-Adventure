@@ -1,6 +1,6 @@
-# 🤖 Odibot Adventure: Petualangan Koding SD Kelas 6
+# 🤖 Odibot Adventure: Dasar Koding & Kecerdasan Artifisial (KA)
 
-Game edukasi interaktif untuk melatih logika berpikir komputasional, algoritma runtunan, perulangan, percabangan, fungsi, dan debugging bagi siswa SD kelas 6 (Kurikulum Merdeka).
+Game edukasi interaktif untuk memahami dasar pelajaran Koding dan Kecerdasan Artifisial (KA), melatih logika berpikir komputasional, algoritma runtunan, perulangan, percabangan, fungsi, dan debugging secara universal.
 
 ---
 

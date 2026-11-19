@@ -4,6 +4,9 @@ import { sounds } from '../utils/audio';
 import { getLevelThresholds } from '../utils/codeConverter';
 import { Star, ArrowRight, RotateCcw, ListFilter, Code2, Award, CheckCircle, Sparkles } from 'lucide-react';
 
+import { AchievementBadgeStatus } from '../data/badges';
+import { BADGE_THEME_STYLES, BadgeIcon } from './BadgeIcon';
+
 interface VictoryModalProps {
   level: LevelDefinition;
   starsEarned: number;
@@ -11,6 +14,7 @@ interface VictoryModalProps {
   crystalsCollected: number;
   totalCrystals: number;
   pythonCode: string;
+  newlyUnlockedBadges?: AchievementBadgeStatus[];
   onNextLevel: () => void;
   onReplay: () => void;
   onOpenLevelSelect: () => void;
@@ -24,6 +28,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   crystalsCollected,
   totalCrystals,
   pythonCode,
+  newlyUnlockedBadges = [],
   onNextLevel,
   onReplay,
   onOpenLevelSelect,
@@ -101,7 +106,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
       : `Misi tuntas! Coba sederhanakan kodemu untuk meraih lebih banyak bintang.`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/88 animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4 sm:p-6 text-slate-100 flex flex-col animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         {/* Glow backdrop behind stars */}
         <div
@@ -222,6 +227,53 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Newly Unlocked Achievement Badges */}
+        {newlyUnlockedBadges.length > 0 && (
+          <div className="my-1.5 p-3 bg-gradient-to-r from-amber-950/60 via-slate-900 to-cyan-950/50 border border-amber-400/60 rounded-xl shadow-lg shadow-amber-500/10 animate-in zoom-in-95 duration-300">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Lencana Prestasi Baru Terbuka!</span>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-200 border border-amber-400/40">
+                +{newlyUnlockedBadges.length} Lencana
+              </span>
+            </div>
+            <div className="space-y-2">
+              {newlyUnlockedBadges.map((badge) => {
+                const style = BADGE_THEME_STYLES[badge.theme];
+                return (
+                  <div
+                    key={badge.id}
+                    className={`flex items-center gap-2.5 p-2 rounded-lg border ${style.unlockedCard}`}
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 shadow-md ${style.iconBg}`}
+                    >
+                      <BadgeIcon name={badge.icon} className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1 text-left">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-white truncate">
+                          {badge.title}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${style.pillClass}`}
+                        >
+                          {badge.category}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-snug">
+                        {badge.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Educational Takeaway (Pedagogical Reflection) */}
         <div className="p-3.5 my-1.5 bg-gradient-to-r from-blue-950/40 to-slate-950/60 border border-blue-800/40 rounded-xl text-left">

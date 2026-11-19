@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ALL_LEVELS, ZONES } from '../data/levels';
 import { DifficultyLevel, LevelDefinition, UserProgress } from '../types/game';
 import { sounds } from '../utils/audio';
@@ -59,13 +59,55 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
   const [selectedZoneId, setSelectedZoneId] = useState<string>(initialZone);
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel | 'ALL'>('ALL');
 
-  const selectedZone = ZONES.find((z) => z.id === selectedZoneId) || ZONES[0];
-  const zoneLevels = ALL_LEVELS.filter((l) => l.zoneId === selectedZoneId);
-  const filteredLevels = zoneLevels.filter(
-    (l) => selectedDifficulty === 'ALL' || (l.difficulty || 'MUDAH') === selectedDifficulty
+  const selectedZone = useMemo(
+    () => ZONES.find((z) => z.id === selectedZoneId) || ZONES[0],
+    [selectedZoneId]
+  );
+  const zoneLevels = useMemo(
+    () => ALL_LEVELS.filter((l) => l.zoneId === selectedZoneId),
+    [selectedZoneId]
+  );
+  const filteredLevels = useMemo(
+    () =>
+      zoneLevels.filter(
+        (l) => selectedDifficulty === 'ALL' || (l.difficulty || 'MUDAH') === selectedDifficulty
+      ),
+    [zoneLevels, selectedDifficulty]
   );
 
-  const totalCompleted = Object.keys(progress.completedLevels).length;
+  const zoneStatsMap = useMemo(() => {
+    const map: Record<string, { total: number; completed: number }> = {};
+    for (const z of ZONES) {
+      map[z.id] = { total: 0, completed: 0 };
+    }
+    for (const l of ALL_LEVELS) {
+      const bucket = map[l.zoneId];
+      if (bucket) {
+        bucket.total += 1;
+        if (progress.completedLevels[l.id]) bucket.completed += 1;
+      }
+    }
+    return map;
+  }, [progress.completedLevels]);
+
+  const difficultyCounts = useMemo(() => {
+    const counts: Record<DifficultyLevel, number> = {
+      MUDAH: 0,
+      SEDANG: 0,
+      SULIT: 0,
+      MASTER: 0,
+    };
+    for (const l of zoneLevels) {
+      const diff = l.difficulty || 'MUDAH';
+      counts[diff] += 1;
+    }
+    return counts;
+  }, [zoneLevels]);
+
+  const totalCompleted = useMemo(
+    () => Object.keys(progress.completedLevels).length,
+    [progress.completedLevels]
+  );
 
   const getZoneIcon = (iconName: string) => {
     switch (iconName) {
@@ -87,7 +129,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/92 animate-in fade-in duration-150">
       <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh]">
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-3.5 border-b border-slate-800 bg-slate-950/70 gap-2 shrink-0">
@@ -117,10 +159,9 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
         <div className="flex items-center gap-1.5 px-3 sm:px-6 py-2 bg-slate-950/50 border-b border-slate-800 overflow-x-auto no-scrollbar shrink-0">
           {ZONES.map((zone) => {
             const isSelected = zone.id === selectedZoneId;
-            const totalInZone = ALL_LEVELS.filter((l) => l.zoneId === zone.id).length;
-            const completedInZone = ALL_LEVELS.filter(
-              (l) => l.zoneId === zone.id && progress.completedLevels[l.id]
-            ).length;
+            const stats = zoneStatsMap[zone.id] || { total: 0, completed: 0 };
+            const totalInZone = stats.total;
+            const completedInZone = stats.completed;
 
             return (
               <button
@@ -179,9 +220,7 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
             </button>
             {(['MUDAH', 'SEDANG', 'SULIT', 'MASTER'] as const).map((diff) => {
               const conf = DIFFICULTY_CONFIG[diff];
-              const countInDiff = zoneLevels.filter(
-                (l) => (l.difficulty || 'MUDAH') === diff
-              ).length;
+              const countInDiff = difficultyCounts[diff];
               const isActive = selectedDifficulty === diff;
 
               return (

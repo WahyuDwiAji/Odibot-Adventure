@@ -22,16 +22,20 @@ interface ConceptBarProps {
   totalCrystalsInLevel: number;
   totalBlocksUsed: number;
   onOpenConceptModal: (zoneId?: string) => void;
+  onOpenFeatureGuide?: () => void;
+  featureGuideLabel?: string;
   onLoadStarterCode?: () => void;
   isSimulating: boolean;
 }
 
-export const ConceptBar: React.FC<ConceptBarProps> = ({
+export const ConceptBar: React.FC<ConceptBarProps> = React.memo(({
   level,
   crystalsCollected,
   totalCrystalsInLevel,
   totalBlocksUsed,
   onOpenConceptModal,
+  onOpenFeatureGuide,
+  featureGuideLabel,
   onLoadStarterCode,
   isSimulating,
 }) => {
@@ -108,6 +112,19 @@ export const ConceptBar: React.FC<ConceptBarProps> = ({
               <span className="hidden sm:inline">Teori Komputasi</span>
               <span className="sm:hidden">Teori</span>
             </button>
+            {onOpenFeatureGuide && (
+              <button
+                onClick={() => {
+                  sounds.playClick();
+                  onOpenFeatureGuide();
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-300 hover:text-emerald-200 bg-emerald-950/80 hover:bg-emerald-900/80 px-2 py-0.5 rounded-lg border border-emerald-700/80 transition-colors shrink-0 min-h-[28px]"
+                title="Buka panduan cara menggunakan fitur di level ini"
+              >
+                <Sparkles className="w-3 h-3 text-emerald-400" />
+                <span>{featureGuideLabel || 'Cara Pakai'}</span>
+              </button>
+            )}
             {level.realWorldCS && (
               <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-800/60 px-2 py-0.5 rounded hidden xl:inline shrink-0">
                 🚀 {level.realWorldCS}
@@ -192,4 +209,4 @@ export const ConceptBar: React.FC<ConceptBarProps> = ({
       </div>
     </div>
   );
-};
+});

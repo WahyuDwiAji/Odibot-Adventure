@@ -50,7 +50,7 @@ interface BlockWorkspaceProps {
 
 type PaletteCategory = 'ALL' | 'MOTION' | 'VARIABLE' | 'LOOP' | 'LOGIC' | 'FUNCTION';
 
-export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
+export const BlockWorkspace: React.FC<BlockWorkspaceProps> = React.memo(({
   level,
   mainBlocks,
   f1Blocks,
@@ -458,6 +458,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
 
           {level.allowF1 && (
             <button
+              data-feature-target="f1-tab"
               onClick={() => {
                 sounds.playClick();
                 setActiveTab('F1');
@@ -475,6 +476,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
 
           {level.allowF2 && (
             <button
+              data-feature-target="f2-tab"
               onClick={() => {
                 sounds.playClick();
                 setActiveTab('F2');
@@ -973,7 +975,13 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
             <div className="px-3 py-2 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between shrink-0">
               <span className="text-xs font-black text-emerald-300 flex items-center gap-1.5 uppercase tracking-wider font-display">
                 <ListOrdered className="w-3.5 h-3.5 text-emerald-400" />
-                <span>SUSUNAN KODE ODIBOT ({currentList.length})</span>
+                <span>
+                  {activeTab === 'F1'
+                    ? `ISI FUNGSI F1() (${currentList.length})`
+                    : activeTab === 'F2'
+                    ? `ISI FUNGSI F2() (${currentList.length})`
+                    : `SUSUNAN KODE ODIBOT (${currentList.length})`}
+                </span>
               </span>
               {currentList.length > 0 && (
                 <span className="text-[10px] text-emerald-400 font-mono font-bold">
@@ -981,6 +989,17 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
                 </span>
               )}
             </div>
+
+            {(activeTab === 'F1' || activeTab === 'F2') && (
+              <div className="mx-2.5 mt-2 px-3 py-2 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-[11px] text-emerald-100 leading-snug shrink-0">
+                <span className="font-bold text-emerald-300">
+                  ⚙️ Mengisi Resep {activeTab}():
+                </span>{' '}
+                Susun pola gerakan di sini, lalu kembali ke tab{' '}
+                <strong className="text-white">Program Utama</strong> dan klik{' '}
+                <strong className="text-emerald-300">Panggil {activeTab}()</strong> untuk menjalankannya!
+              </div>
+            )}
 
             {/* Active Container Targeting Banner */}
             {activeContainer && (
@@ -1096,7 +1115,7 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = ({
       )}
     </div>
   );
-};
+});
 
 // Child Block Card component with Scratch-style aesthetics & full recursive nesting support
 interface BlockCardProps {

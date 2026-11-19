@@ -35,7 +35,7 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
       subtitle: 'Bagaimana Komputer Mengingat Data Saat Program Berjalan',
       icon: Cpu,
       color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
-      badge: 'Fase C · Arsitektur Komputasi',
+      badge: 'Dasar Koding · Arsitektur Komputasi',
       thematicStory:
         'Di Stasiun Antariksa Aurora, Kodi membutuhkan alokasi memori RAM untuk mencatat sisa energi baterai dan jumlah kristal reaktor yang telah diamankan.',
       csTheory:
@@ -59,7 +59,7 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
       subtitle: 'Otomatisasi Algoritma Sesuai Prinsip DRY (Don\'t Repeat Yourself)',
       icon: Repeat,
       color: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
-      badge: 'Fase C · Efisiensi Algoritma',
+      badge: 'Dasar Koding · Efisiensi Algoritma',
       thematicStory:
         'Lorong reaktor memiliki 6 petak berulang. Menuliskan instruksi satu per satu membuat kode membengkak dan memboroskan memori CPU!',
       csTheory:
@@ -83,7 +83,7 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
       subtitle: 'Menyimpan & Memproses Antrean Data Terurut',
       icon: ListOrdered,
       color: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-      badge: 'Fase C · Struktur Data Komputer',
+      badge: 'Dasar Koding · Struktur Data Komputer',
       thematicStory:
         'Pangkalan Bumi mengirimkan paket rute terenkripsi ke buffer satelit Kodi: antrean perintah harus dibaca berurutan sesuai nomor indeks.',
       csTheory:
@@ -107,7 +107,7 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
       subtitle: 'Memecah Masalah Kompleks Menjadi Modul-Modul Pintas',
       icon: Boxes,
       color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
-      badge: 'Fase C · Rekayasa Perangkat Lunak',
+      badge: 'Dasar Koding · Rekayasa Perangkat Lunak',
       thematicStory:
         'Manuver menghindari perangkap laser membutuhkan 4 langkah rumit: Lompat -> Belok -> Ambil -> Putar Balik. Daripada mengulanginya berkali-kali, bungkus ke dalam Fungsi F1!',
       csTheory:
@@ -130,7 +130,7 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
       subtitle: 'Kecerdasan Buatan (AI) Berbasis Evaluasi Sensor',
       icon: GitBranch,
       color: 'text-amber-500 bg-amber-500/10 border-amber-500/30',
-      badge: 'Fase C · Logika Komputasional',
+      badge: 'Dasar KA · Logika Komputasional',
       thematicStory:
         'Gerbang keamanan reaktor dilindungi laser berdaya tinggi. Kodi harus mengevaluasi sinyal sensor saklar: jika laser nonaktif, maju; jika aktif, injak saklar pengaman!',
       csTheory:
@@ -153,7 +153,7 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
       subtitle: 'Menganalisis Crash Dump & Memperbaiki Kesalahan Algoritma',
       icon: Bug,
       color: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
-      badge: 'Fase C · Rekayasa Kualitas Perangkat Lunak',
+      badge: 'Dasar Koding · Rekayasa Kualitas Perangkat Lunak',
       thematicStory:
         'Transmisi kode robot mengalami distorsi kosmik! Kodi terjebak menabrak dinding atau berputar di tempat. Temukan bug dalam program dan perbaiki baris logikanya!',
       csTheory:
@@ -174,7 +174,7 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
   const currentTopic = topics.find((t) => t.id === selectedTopic) || topics[0];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-slate-950/92 animate-in fade-in duration-150">
       <div className="relative w-full max-w-5xl max-h-[92dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
         {/* Modal Top Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800 bg-slate-950/80 shrink-0 gap-2">
@@ -185,10 +185,10 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <h2 className="text-sm sm:text-lg font-bold font-display text-white truncate">
-                  Pusat Kurikulum Koding SD
+                  Pusat Materi Koding &amp; KA
                 </h2>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono shrink-0">
-                  Fase C
+                  Dasar
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-slate-400 truncate mt-0.5">
@@ -356,7 +356,7 @@ export const ConceptModal: React.FC<ConceptModalProps> = ({ onClose, activeConce
         {/* Modal Bottom Footer */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-t border-slate-800 bg-slate-950/90 shrink-0 text-xs text-slate-400">
           <span className="hidden sm:inline">
-            Disusun untuk Capaian Pembelajaran Koding dan Kecerdasan Artifisial (KA) Fase C (SD Kelas 5 &amp; 6).
+            Disusun sebagai panduan universal untuk memahami dasar pelajaran Koding dan Kecerdasan Artifisial (KA).
           </span>
           <button
             onClick={() => {

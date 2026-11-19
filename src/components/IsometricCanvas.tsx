@@ -84,6 +84,7 @@ interface IsometricCanvasProps {
   skinId?: RobotSkinId;
   autoRunCountdown?: number | null;
   autoRunEnabled?: boolean;
+  isPaused?: boolean;
 }
 
 const DIR_ANGLES: Record<Direction, number> = {
@@ -126,7 +127,7 @@ function drawRoundRect(
   ctx.quadraticCurveTo(x, y, x + r, y);
 }
 
-export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
+export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
   level,
   tiles,
   robotState,
@@ -138,6 +139,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
   skinId = 'CYAN',
   autoRunCountdown = null,
   autoRunEnabled = false,
+  isPaused = false,
 }) => {
   const victoryActive = Boolean(isVictory || celebratingVictory);
   const isThinking = Boolean(
@@ -418,17 +420,32 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Main 60 FPS Game Render Loop (single mount lifecycle — never restarts on state updates)
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
+  const resumeCanvasLoopRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!isPaused) {
+      resumeCanvasLoopRef.current?.();
+    }
+  }, [isPaused]);
+
+  // Main 60 FPS Game Render Loop (single mount lifecycle — pauses cleanly when modal open or tab hidden)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
-    let animationFrameId: number;
+    let animationFrameId: number | null = null;
     let lastTime = performance.now();
 
     const render = (now: number) => {
+      animationFrameId = null;
+      if (isPausedRef.current || document.hidden) {
+        return;
+      }
+
       const rawDt = (now - lastTime) / 1000;
       lastTime = now;
       const dt = Math.min(rawDt, 0.05); // Clamp dt for 60fps simulation
@@ -1463,13 +1480,34 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
 
       ctx.restore();
 
-      animationFrameId = requestAnimationFrame(render);
+      if (!isPausedRef.current && !document.hidden) {
+        animationFrameId = requestAnimationFrame(render);
+      }
     };
 
-    animationFrameId = requestAnimationFrame(render);
+    const scheduleRender = () => {
+      if (animationFrameId === null && !isPausedRef.current && !document.hidden) {
+        lastTime = performance.now();
+        animationFrameId = requestAnimationFrame(render);
+      }
+    };
+
+    resumeCanvasLoopRef.current = scheduleRender;
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        scheduleRender();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    scheduleRender();
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      resumeCanvasLoopRef.current = null;
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
   }, []);
 
@@ -1793,4 +1831,4 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = ({
       )}
     </div>
   );
-};
+});

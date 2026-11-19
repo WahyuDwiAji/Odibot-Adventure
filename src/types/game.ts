@@ -132,10 +132,33 @@ export interface UserProgress {
   currentLevelId: string;
   unlockedZones: string[];
   userProfile?: {
+    uid?: string;
     email: string;
     displayName: string;
     avatarUrl?: string;
     lastSynced?: string;
   };
   customSkin?: RobotSkinId;
+  unlockedBadges?: Record<string, string>; // badgeId -> ISO timestamp unlocked
+  stats?: {
+    fastDebugSolves?: number;
+    totalPerfectRuns?: number;
+    fastestMissionMs?: number;
+    fastestLevelTitle?: string;
+  };
 }
+
+export type LeaderboardSortMode = 'BADGES' | 'SPEED';
+
+export interface LeaderboardEntry {
+  uid: string;
+  displayName: string;
+  skinId: RobotSkinId;
+  badgeCount: number;
+  fastestMissionMs: number;
+  fastestLevelTitle: string;
+  completedMissions: number;
+  totalStars: number;
+  updatedAt?: string;
+}
+

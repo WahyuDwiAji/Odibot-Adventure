@@ -1,7 +1,7 @@
 import { BlockCommand, LevelDefinition } from '../types/game';
 
 /**
- * Converts visual block structures to formatted Python code for Indonesian SD Kelas 6 students
+ * Converts visual block structures to formatted Python code for learning Coding & AI fundamentals
  */
 export function blocksToPython(
   mainBlocks: BlockCommand[],
@@ -12,7 +12,7 @@ export function blocksToPython(
 ): string {
   const lines: string[] = [
     '# Program Misi Koding Robot Kodi (Python 3)',
-    '# Kurikulum Koding dan Kecerdasan Artifisial (KA) SD Kelas 6 - Fase C',
+    '# Pembelajaran Dasar Koding dan Kecerdasan Artifisial (KA)',
     '',
   ];
 

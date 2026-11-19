@@ -1,6 +1,17 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { sounds } from '../utils/audio';
 import { OdibotMascot } from './OdibotMascot';
+import {
+  loadConceptModal,
+  loadGameSession,
+  loadGoogleCloudSyncModal,
+  loadGuideModal,
+  loadLeaderboardModal,
+  loadLevelSelectModal,
+  loadSandboxEditor,
+  loadSkinSelectorModal,
+  prefetchIdleChunks,
+} from '../utils/preload';
 import {
   Play,
   Bug,
@@ -13,6 +24,8 @@ import {
   BookMarked,
   Palette,
   CheckCircle2,
+  Award,
+  Trophy,
 } from 'lucide-react';
 
 interface TitleScreenProps {
@@ -23,6 +36,7 @@ interface TitleScreenProps {
   onOpenConceptGuide: () => void;
   onOpenGuide?: () => void;
   onOpenGoogleLogin?: () => void;
+  onOpenLeaderboard?: () => void;
   onOpenSkinSelector?: () => void;
   userProfile?: {
     email: string;
@@ -35,9 +49,11 @@ interface TitleScreenProps {
   onToggleMute: () => void;
   completedCount: number;
   totalLevels: number;
+  unlockedBadgesCount?: number;
+  totalBadgesCount?: number;
 }
 
-export const TitleScreen: React.FC<TitleScreenProps> = ({
+export const TitleScreen: React.FC<TitleScreenProps> = React.memo(({
   onStartGame,
   onOpenLevelSelect,
   onOpenDebugMode,
@@ -45,13 +61,20 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   onOpenConceptGuide,
   onOpenGuide,
   onOpenGoogleLogin,
+  onOpenLeaderboard,
   onOpenSkinSelector,
   userProfile,
   isMuted,
   onToggleMute,
   completedCount,
   totalLevels,
+  unlockedBadgesCount = 0,
+  totalBadgesCount = 10,
 }) => {
+  useEffect(() => {
+    prefetchIdleChunks();
+  }, []);
+
   return (
     <div className="relative w-full min-h-[100dvh] md:h-[100dvh] bg-[#070B14] text-slate-100 flex flex-col justify-between overflow-y-auto md:overflow-hidden select-none">
       {/* Background ambient cosmic glow */}
@@ -70,57 +93,66 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               Odibot Adventure
             </h1>
             <p className="text-[11px] text-slate-400 truncate">
-              Koding dan Kecerdasan Artifisial (KA) SD Kelas 6 <span aria-hidden="true">·</span> <span className="font-mono text-cyan-400">{completedCount}/{totalLevels}</span> Misi
+              Dasar Koding dan Kecerdasan Artifisial (KA) <span aria-hidden="true">·</span> <span className="font-mono text-cyan-400">{completedCount}/{totalLevels}</span> Misi
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* Google Sign-In & Cloud Sync Button */}
+          {/* Profil, Lencana Prestasi & Google Cloud Button */}
           {onOpenGoogleLogin && (
             <button
               onClick={() => {
                 sounds.playClick();
                 onOpenGoogleLogin();
               }}
+              onMouseEnter={() => void loadGoogleCloudSyncModal()}
+              onTouchStart={() => void loadGoogleCloudSyncModal()}
               className={`flex items-center justify-center gap-1.5 min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
                 userProfile
                   ? 'bg-slate-900/90 border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
-                  : 'bg-white hover:bg-slate-100 text-slate-900 border-slate-200 shadow-sm'
+                  : 'bg-slate-900 hover:bg-slate-800 text-amber-200 border-amber-500/45 shadow-sm'
               }`}
-              title="Akun Google & Sinkronisasi Cloud"
+              title="Profil Pengguna, Lencana Prestasi & Sinkronisasi Google"
             >
               {userProfile ? (
                 <>
                   <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-[10px] font-bold">
                     {userProfile.displayName ? userProfile.displayName.charAt(0) : 'G'}
                   </div>
-                  <span className="max-w-[100px] truncate hidden sm:inline">{userProfile.displayName}</span>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="max-w-[96px] truncate hidden sm:inline">{userProfile.displayName}</span>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold">
+                    <Award className="w-3 h-3" />
+                    {unlockedBadgesCount}/{totalBadgesCount}
+                  </span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 hidden sm:inline" />
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
-                  </svg>
-                  <span className="hidden sm:inline">Masuk Google</span>
+                  <Award className="w-4 h-4 text-amber-400" />
+                  <span className="hidden sm:inline">Profil</span>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold">
+                    {unlockedBadgesCount}/{totalBadgesCount}
+                  </span>
                 </>
               )}
+            </button>
+          )}
+
+          {/* Papan Peringkat (Leaderboard) Button */}
+          {onOpenLeaderboard && (
+            <button
+              onClick={() => {
+                sounds.playClick();
+                onOpenLeaderboard();
+              }}
+              onMouseEnter={() => void loadLeaderboardModal()}
+              onTouchStart={() => void loadLeaderboardModal()}
+              className="flex items-center justify-center gap-1.5 min-h-[40px] px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-amber-500/45 rounded-xl text-xs font-semibold text-amber-300 hover:text-amber-200 transition-colors"
+              title="Papan Peringkat Odibot (Firebase)"
+            >
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline">Peringkat</span>
             </button>
           )}
 
@@ -131,6 +163,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 sounds.playClick();
                 onOpenGuide();
               }}
+              onMouseEnter={() => void loadGuideModal()}
+              onTouchStart={() => void loadGuideModal()}
               className="flex items-center justify-center gap-1.5 min-h-[40px] px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 rounded-xl text-xs font-semibold text-cyan-200 hover:text-white transition-colors"
               title="Panduan Menggunakan Odibot"
             >
@@ -146,6 +180,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 sounds.playClick();
                 onOpenSkinSelector();
               }}
+              onMouseEnter={() => void loadSkinSelectorModal()}
+              onTouchStart={() => void loadSkinSelectorModal()}
               className="flex items-center justify-center gap-1.5 min-h-[40px] min-w-[40px] px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-purple-500/40 rounded-xl text-xs font-semibold text-purple-200 hover:text-white transition-colors"
               title="Bengkel Kostum Robot Odibot"
             >
@@ -169,10 +205,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
       {/* Hero Centerpiece with Mascot & Title Lockup */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center w-full max-w-4xl mx-auto px-4 sm:px-6 py-5 sm:py-6 text-center">
-        {/* Mascot Avatar Card */}
-        <div className="relative mb-3 cursor-pointer group" onClick={onOpenSkinSelector}>
-          <OdibotMascot size="md" className="sm:hidden group-hover:scale-105 transition-transform duration-300" showBadge />
-          <OdibotMascot size="lg" className="hidden sm:inline-block group-hover:scale-105 transition-transform duration-300" showBadge />
+        {/* Mascot Avatar Card (single responsive mount) */}
+        <div
+          className="relative mb-3 cursor-pointer group"
+          onClick={onOpenSkinSelector}
+          onMouseEnter={() => void loadSkinSelectorModal()}
+        >
+          <OdibotMascot size="hero" className="group-hover:scale-105 transition-transform duration-300" showBadge />
         </div>
 
         {/* Bespoke Inline SVG Title Lockup */}
@@ -207,6 +246,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               sounds.playClick();
               onStartGame();
             }}
+            onMouseEnter={() => void loadGameSession()}
+            onTouchStart={() => void loadGameSession()}
             className="w-full sm:w-auto min-h-[48px] px-8 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold font-display text-base rounded-xl shadow-lg shadow-cyan-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             <Play className="w-5 h-5 fill-current" />
@@ -217,6 +258,14 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             onClick={() => {
               sounds.playClick();
               onOpenLevelSelect();
+            }}
+            onMouseEnter={() => {
+              void loadGameSession();
+              void loadLevelSelectModal();
+            }}
+            onTouchStart={() => {
+              void loadGameSession();
+              void loadLevelSelectModal();
             }}
             className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 rounded-xl font-medium text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
@@ -232,6 +281,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               sounds.playClick();
               onOpenConceptGuide();
             }}
+            onMouseEnter={() => void loadConceptModal()}
+            onTouchStart={() => void loadConceptModal()}
             className="flex items-center gap-3 p-3 min-h-[58px] bg-slate-900/75 hover:bg-slate-800/90 border border-cyan-900/40 hover:border-cyan-500/50 rounded-xl text-left active:scale-[0.99] transition-all group"
           >
             <div className="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
@@ -239,7 +290,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             </div>
             <div className="min-w-0">
               <div className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors">
-                Materi Konsep SD
+                Materi Konsep Koding
               </div>
               <div className="text-[11px] text-slate-400 truncate">
                 Variabel, Loop, List, &amp; Prosedur
@@ -252,6 +303,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               sounds.playClick();
               onOpenDebugMode();
             }}
+            onMouseEnter={() => void loadGameSession()}
+            onTouchStart={() => void loadGameSession()}
             className="flex items-center gap-3 p-3 min-h-[58px] bg-slate-900/75 hover:bg-slate-800/90 border border-rose-900/40 hover:border-rose-500/50 rounded-xl text-left active:scale-[0.99] transition-all group"
           >
             <div className="w-10 h-10 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
@@ -271,6 +324,14 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             onClick={() => {
               sounds.playClick();
               onOpenSandbox();
+            }}
+            onMouseEnter={() => {
+              void loadGameSession();
+              void loadSandboxEditor();
+            }}
+            onTouchStart={() => {
+              void loadGameSession();
+              void loadSandboxEditor();
             }}
             className="flex items-center gap-3 p-3 min-h-[58px] bg-slate-900/75 hover:bg-slate-800/90 border border-amber-900/40 hover:border-amber-500/50 rounded-xl text-left active:scale-[0.99] transition-all group"
           >
@@ -293,7 +354,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       <footer className="relative z-10 px-4 sm:px-6 py-3 border-t border-slate-900 bg-slate-950/90 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-1.5 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center gap-2 text-center sm:text-left">
           <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 hidden sm:inline" />
-          <span className="text-[11px] sm:text-xs">Koding dan Kecerdasan Artifisial (KA) SD Kelas 6 (Kurikulum Merdeka)</span>
+          <span className="text-[11px] sm:text-xs">Dasar Pelajaran Koding dan Kecerdasan Artifisial (KA)</span>
         </div>
 
         <div className="flex items-center gap-3 text-[11px]">
@@ -308,4 +369,4 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       </footer>
     </div>
   );
-};
+});

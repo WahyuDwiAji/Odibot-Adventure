@@ -16,6 +16,16 @@ class SoundSystem {
     } catch {
       this.isMuted = false;
     }
+
+    if (typeof window !== 'undefined') {
+      const unlock = () => {
+        if (!this.isMuted) {
+          this.initCtx();
+        }
+      };
+      window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+      window.addEventListener('keydown', unlock, { once: true, passive: true });
+    }
   }
 
   private initCtx() {

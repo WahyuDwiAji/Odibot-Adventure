@@ -3,12 +3,12 @@ import mascotJpg from '../assets/images/kodibot_mascot_hero_1794195289256.jpg';
 
 interface OdibotMascotProps {
   className?: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'hero';
   showBadge?: boolean;
   alt?: string;
 }
 
-export const OdibotMascot: React.FC<OdibotMascotProps> = ({
+export const OdibotMascot: React.FC<OdibotMascotProps> = React.memo(({
   className = '',
   size = 'md',
   showBadge = false,
@@ -21,6 +21,7 @@ export const OdibotMascot: React.FC<OdibotMascotProps> = ({
     md: 'w-20 h-20',
     lg: 'w-32 h-32 sm:w-36 sm:h-36',
     xl: 'w-44 h-44 sm:w-52 sm:h-52',
+    hero: 'w-20 h-20 sm:w-36 sm:h-36',
   }[size];
 
   return (
@@ -39,6 +40,7 @@ export const OdibotMascot: React.FC<OdibotMascotProps> = ({
             alt={alt}
             onError={() => setImageFailed(true)}
             className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
+            loading="eager"
             decoding="async"
           />
         ) : (
@@ -132,4 +134,4 @@ export const OdibotMascot: React.FC<OdibotMascotProps> = ({
       )}
     </div>
   );
-};
+});

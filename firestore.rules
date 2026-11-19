@@ -1,0 +1,187 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable Security Primitives
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true;
+    }
+
+    function isValidSkin(skinId) {
+      return skinId in ['CYAN', 'NEON_VOLT', 'CYBER_PINK', 'EMERALD', 'GOLDEN'];
+    }
+
+    // Validation Blueprint: Public Leaderboard Entry (Zero PII)
+    function isValidLeaderboardEntry(data, userId) {
+      return data.keys().hasAll([
+          'uid',
+          'displayName',
+          'skinId',
+          'badgeCount',
+          'fastestMissionMs',
+          'fastestLevelTitle',
+          'completedMissions',
+          'totalStars',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'skinId',
+          'badgeCount',
+          'fastestMissionMs',
+          'fastestLevelTitle',
+          'completedMissions',
+          'totalStars',
+          'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 40
+        && isValidSkin(data.skinId)
+        && data.badgeCount is int
+        && data.badgeCount >= 0
+        && data.badgeCount <= 10
+        && data.fastestMissionMs is int
+        && data.fastestMissionMs >= 0
+        && data.fastestMissionMs <= 3600000
+        && data.fastestLevelTitle is string
+        && data.fastestLevelTitle.size() <= 80
+        && data.completedMissions is int
+        && data.completedMissions >= 0
+        && data.completedMissions <= 64
+        && data.totalStars is int
+        && data.totalStars >= 0
+        && data.totalStars <= 192
+        && data.updatedAt == request.time;
+    }
+
+    // Validation Blueprint: Private User Profile & Cloud Save
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid',
+          'email',
+          'displayName',
+          'customSkin',
+          'currentLevelId',
+          'unlockedZones',
+          'completedLevels',
+          'unlockedBadges',
+          'stats',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'email',
+          'displayName',
+          'customSkin',
+          'currentLevelId',
+          'unlockedZones',
+          'completedLevels',
+          'unlockedBadges',
+          'stats',
+          'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 120
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 40
+        && isValidSkin(data.customSkin)
+        && data.currentLevelId is string
+        && data.currentLevelId.size() >= 1
+        && data.currentLevelId.size() <= 32
+        && data.unlockedZones is list
+        && data.unlockedZones.size() >= 1
+        && data.unlockedZones.size() <= 10
+        && data.unlockedZones[0] is string
+        && data.unlockedZones[0].size() <= 32
+        && data.completedLevels is map
+        && data.completedLevels.size() <= 100
+        && data.unlockedBadges is map
+        && data.unlockedBadges.size() <= 30
+        && data.stats is map
+        && data.stats.size() <= 10
+        && data.updatedAt == request.time;
+    }
+
+    // Public Leaderboard Collection (non-PII rankings, owner-only mutations)
+    match /leaderboard/{userId} {
+      allow get: if isValidId(userId) && (resource == null || existing().badgeCount >= 0);
+      allow list: if resource.data.badgeCount >= 0 || resource.data.fastestMissionMs > 0;
+      allow create: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidLeaderboardEntry(incoming(), userId);
+      allow update: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidLeaderboardEntry(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName',
+          'skinId',
+          'badgeCount',
+          'fastestMissionMs',
+          'fastestLevelTitle',
+          'completedMissions',
+          'totalStars',
+          'updatedAt'
+        ]);
+      allow delete: if isVerifiedOwner(userId) && isValidId(userId);
+    }
+
+    // Private User Cloud Progress Collection (strictly owner-only, no list)
+    match /users/{userId} {
+      allow get: if isVerifiedOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow create: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId);
+      allow update: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'email',
+          'displayName',
+          'customSkin',
+          'currentLevelId',
+          'unlockedZones',
+          'completedLevels',
+          'unlockedBadges',
+          'stats',
+          'updatedAt'
+        ]);
+      allow delete: if isVerifiedOwner(userId) && isValidId(userId);
+    }
+  }
+}

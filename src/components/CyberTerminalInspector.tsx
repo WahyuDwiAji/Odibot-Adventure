@@ -25,7 +25,7 @@ interface CyberTerminalInspectorProps {
   historySteps: ExecutionStep[];
 }
 
-export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
+export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = React.memo(({
   level,
   robotState,
   variables,
@@ -337,4 +337,4 @@ export const CyberTerminalInspector: React.FC<CyberTerminalInspectorProps> = ({
       )}
     </div>
   );
-};
+});

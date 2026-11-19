@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Public, non-PII player ranking record showing badge count, fastest mission completion time, stars, and mission count.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document ID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Public player nickname shown on the leaderboard.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "skinId": {
+          "type": "string",
+          "description": "Selected Odibot robot skin.",
+          "enum": ["CYAN", "NEON_VOLT", "CYBER_PINK", "EMERALD", "GOLDEN"]
+        },
+        "badgeCount": {
+          "type": "integer",
+          "description": "Total unlocked achievement badges (0 to 10)."
+        },
+        "fastestMissionMs": {
+          "type": "integer",
+          "description": "Fastest mission completion duration in milliseconds (0 if not yet timed)."
+        },
+        "fastestLevelTitle": {
+          "type": "string",
+          "description": "Title of the mission completed in fastest time.",
+          "maxLength": 80
+        },
+        "completedMissions": {
+          "type": "integer",
+          "description": "Total unique missions completed (0 to 64)."
+        },
+        "totalStars": {
+          "type": "integer",
+          "description": "Total efficiency stars earned (0 to 192)."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when leaderboard entry was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "skinId",
+        "badgeCount",
+        "fastestMissionMs",
+        "fastestLevelTitle",
+        "completedMissions",
+        "totalStars",
+        "updatedAt"
+      ]
+    },
+    "UserProfileProgress": {
+      "title": "UserProfileProgress",
+      "description": "Private user cloud save containing account metadata, completed levels, unlocked badges, and gameplay stats.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document ID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Authenticated user email (private to owner).",
+          "maxLength": 120
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "customSkin": {
+          "type": "string",
+          "description": "Selected Odibot robot skin.",
+          "enum": ["CYAN", "NEON_VOLT", "CYBER_PINK", "EMERALD", "GOLDEN"]
+        },
+        "currentLevelId": {
+          "type": "string",
+          "description": "Most recent active level ID.",
+          "maxLength": 32
+        },
+        "unlockedZones": {
+          "type": "array",
+          "description": "List of unlocked zone IDs (max 10 items)."
+        },
+        "completedLevels": {
+          "type": "object",
+          "description": "Map of levelId -> { stars, bestBlockCount }."
+        },
+        "unlockedBadges": {
+          "type": "object",
+          "description": "Map of badgeId -> ISO timestamp string."
+        },
+        "stats": {
+          "type": "object",
+          "description": "Gameplay metrics including fastDebugSolves, totalPerfectRuns, fastestMissionMs, fastestLevelTitle."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last cloud save."
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "displayName",
+        "customSkin",
+        "currentLevelId",
+        "unlockedZones",
+        "completedLevels",
+        "unlockedBadges",
+        "stats",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/leaderboard/{userId}": {
+      "schema": {
+        "$ref": "#/entities/LeaderboardEntry"
+      },
+      "description": "Public non-PII leaderboard records indexed by Firebase Auth userId."
+    },
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfileProgress"
+      },
+      "description": "Private cloud backup of user progress, badges, and PII strictly accessible only to the owning user."
+    }
+  }
+}
