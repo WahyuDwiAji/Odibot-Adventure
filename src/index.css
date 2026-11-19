@@ -191,3 +191,225 @@
 .animate-crystal-plus {
   animation: crystalPlusOne 0.85s ease-out forwards;
 }
+
+@keyframes odibotFloat {
+  0%, 100% {
+    transform: translate3d(0, 0px, 0);
+  }
+  50% {
+    transform: translate3d(0, -4.5px, 0);
+  }
+}
+
+@keyframes odibotShadow {
+  0%, 100% {
+    transform: scaleX(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleX(0.84);
+    opacity: 0.28;
+  }
+}
+
+@keyframes odibotWave {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-22deg);
+  }
+  40% {
+    transform: rotate(8deg);
+  }
+  60% {
+    transform: rotate(-18deg);
+  }
+  80% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes odibotLeftArm {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+
+@keyframes odibotBlink {
+  0%, 90%, 100% {
+    transform: scaleY(1);
+  }
+  94% {
+    transform: scaleY(0.1);
+  }
+  97% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes odibotAntenna {
+  0%, 100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes odibotThruster {
+  0%, 100% {
+    transform: scaleY(0.88);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scaleY(1.18);
+    opacity: 1;
+  }
+}
+
+@keyframes odibotScanline {
+  0% {
+    transform: translate3d(-26px, 0, 0);
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate3d(28px, 0, 0);
+    opacity: 0.25;
+  }
+}
+
+@keyframes odibotSignalWave {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+@keyframes odibotProcessBounce {
+  0%, 100% {
+    transform: translate3d(0, 0px, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate3d(0, -3.5px, 0) rotate(-2deg);
+  }
+  75% {
+    transform: translate3d(0, -2px, 0) rotate(2deg);
+  }
+}
+
+@keyframes odibotLedPulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.22);
+  }
+}
+
+.odibot-float {
+  animation: odibotFloat 2.6s ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.odibot-process-float {
+  animation: odibotProcessBounce 0.75s ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.odibot-shadow {
+  animation: odibotShadow 2.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.odibot-arm-wave {
+  animation: odibotWave 2.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 20% 25%;
+}
+
+.odibot-arm-left {
+  animation: odibotLeftArm 2.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 80% 25%;
+}
+
+.odibot-eye-blink {
+  animation: odibotBlink 3.8s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.odibot-antenna {
+  animation: odibotAntenna 3.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+.odibot-thruster {
+  animation: odibotThruster 0.45s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+
+.odibot-scanline {
+  animation: odibotScanline 1.05s ease-in-out infinite alternate;
+}
+
+.odibot-signal-wave {
+  animation: odibotSignalWave 1.1s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.odibot-led-1 {
+  animation: odibotLedPulse 0.75s ease-in-out infinite 0s;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.odibot-led-2 {
+  animation: odibotLedPulse 0.75s ease-in-out infinite 0.22s;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.odibot-led-3 {
+  animation: odibotLedPulse 0.75s ease-in-out infinite 0.44s;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .odibot-float,
+  .odibot-process-float,
+  .odibot-shadow,
+  .odibot-arm-wave,
+  .odibot-arm-left,
+  .odibot-eye-blink,
+  .odibot-antenna,
+  .odibot-thruster,
+  .odibot-scanline,
+  .odibot-signal-wave,
+  .odibot-led-1,
+  .odibot-led-2,
+  .odibot-led-3 {
+    animation: none !important;
+  }
+}
+

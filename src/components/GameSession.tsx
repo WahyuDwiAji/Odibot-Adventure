@@ -28,8 +28,7 @@ import {
   loadSkinSelectorModal,
   prefetchPlayingModals,
 } from '../utils/preload';
-import { auth } from '../firebase';
-import { syncUserProgressAndLeaderboard } from '../services/leaderboardService';
+import { syncProgressIfSignedIn } from '../services/cloudSyncLoader';
 
 import { IsometricCanvas } from './IsometricCanvas';
 import { BlockWorkspace } from './BlockWorkspace';
@@ -558,7 +557,11 @@ export const GameSession: React.FC<GameSessionProps> = ({
         break;
       case 'SET_VAR':
       case 'CHANGE_VAR':
-        sounds.playClick();
+        sounds.playRobotProcess('var');
+        break;
+      case 'CALL_F1':
+      case 'CALL_F2':
+        sounds.playRobotProcess('func');
         break;
       case 'REPEAT':
       case 'WHILE_VAR':
@@ -660,20 +663,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
         localStorage.setItem('kodibot_progress', JSON.stringify(updated));
       } catch {}
 
-      const firebaseUser = auth.currentUser;
-      if (firebaseUser && firebaseUser.emailVerified) {
-        const displayName =
-          updated.userProfile?.displayName ||
-          firebaseUser.displayName ||
-          firebaseUser.email?.split('@')[0] ||
-          'Penjelajah Odibot';
-        void syncUserProgressAndLeaderboard(
-          firebaseUser.uid,
-          firebaseUser.email || updated.userProfile?.email || '',
-          displayName,
-          updated
-        ).catch(() => {});
-      }
+      void syncProgressIfSignedIn(updated);
     },
     [currentLevel, setProgress]
   );
@@ -1058,6 +1048,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
     currentStepIndexRef.current = 0;
     setIsSimulating(true);
     setMobileTab('ARENA');
+    sounds.playRobotGreet();
 
     simulationTimerRef.current = setTimeout(() => {
       processNextStep(simResult, runId);
@@ -1910,6 +1901,7 @@ export const GameSession: React.FC<GameSessionProps> = ({
               robotState={robotState}
               isSimulating={isSimulating}
               activeAction={activeAction}
+              executionStepCount={executionHistory.length}
               isVictory={isVictory}
               celebratingVictory={isVictory}
               onManualAction={handleManualAction}

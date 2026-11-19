@@ -54,6 +54,7 @@ export interface BlockCommand {
 
 export type DifficultyLevel = 'MUDAH' | 'SEDANG' | 'SULIT' | 'MASTER';
 export type RobotSkinId = 'CYAN' | 'NEON_VOLT' | 'CYBER_PINK' | 'EMERALD' | 'GOLDEN';
+export type RobotShapeVariant = 'AERO_POD' | 'PULSE_AUDIO' | 'HOLODRONE_JET' | 'ORBITAL_SAT' | 'QUANTUM_PRIME';
 
 export interface LevelDefinition {
   id: string;

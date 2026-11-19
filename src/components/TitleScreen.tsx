@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { sounds } from '../utils/audio';
 import { OdibotMascot } from './OdibotMascot';
+import { RobotSkinId } from '../types/game';
 import {
   loadConceptModal,
   loadGameSession,
@@ -44,7 +45,7 @@ interface TitleScreenProps {
     avatarUrl?: string;
     lastSynced?: string;
   };
-  currentSkin?: string;
+  currentSkin?: RobotSkinId;
   isMuted: boolean;
   onToggleMute: () => void;
   completedCount: number;
@@ -64,6 +65,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = React.memo(({
   onOpenLeaderboard,
   onOpenSkinSelector,
   userProfile,
+  currentSkin = 'CYAN',
   isMuted,
   onToggleMute,
   completedCount,
@@ -87,7 +89,14 @@ export const TitleScreen: React.FC<TitleScreenProps> = React.memo(({
       {/* Top Bar Status & Audio Toggle */}
       <header className="relative z-10 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800/80 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <OdibotMascot size="sm" className="shrink-0" />
+          <button
+            type="button"
+            onClick={() => sounds.playRobotGreet()}
+            title="Klik untuk mendengar suara robot Odibot!"
+            className="shrink-0 rounded-2xl active:scale-95 transition-transform cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-400/70"
+          >
+            <OdibotMascot size="sm" skinId={currentSkin} />
+          </button>
           <div className="min-w-0">
             <h1 className="text-sm sm:text-base font-bold tracking-tight text-white font-display truncate">
               Odibot Adventure
@@ -210,8 +219,26 @@ export const TitleScreen: React.FC<TitleScreenProps> = React.memo(({
           className="relative mb-3 cursor-pointer group"
           onClick={onOpenSkinSelector}
           onMouseEnter={() => void loadSkinSelectorModal()}
+          title="Klik untuk ganti kostum Odibot"
         >
-          <OdibotMascot size="hero" className="group-hover:scale-105 transition-transform duration-300" showBadge />
+          <OdibotMascot
+            size="hero"
+            skinId={currentSkin}
+            mood="happy"
+            className="group-hover:scale-105 transition-transform duration-300"
+            showBadge
+          />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              sounds.playRobotGreet();
+            }}
+            title="Dengar suara robot Odibot!"
+            className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-slate-900 border border-cyan-400/80 text-cyan-300 hover:text-amber-300 hover:border-amber-400 flex items-center justify-center shadow-lg active:scale-90 transition-all z-10"
+          >
+            <Volume2 className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Bespoke Inline SVG Title Lockup */}

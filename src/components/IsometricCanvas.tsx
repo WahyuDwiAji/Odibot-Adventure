@@ -14,6 +14,7 @@ import {
   Sparkles,
   Gamepad2,
   Layers,
+  Volume2,
 } from 'lucide-react';
 
 interface Particle {
@@ -66,7 +67,17 @@ interface RobotVisualState {
   targetAngle: number;
   currentAngle: number;
   jumpArc: number;
+  squashX: number;
   squashY: number;
+  leanAngle: number;
+  stridePhase: number;
+  landingBounce: number;
+  actionPulse: number;
+  commandPulse: number;
+  commandLabel: string;
+  lastActionType: string;
+  pendingBurst: 'MOVE' | 'JUMP' | 'LAND' | 'COLLECT' | 'SWITCH' | 'COMMAND' | null;
+  trailCooldown: number;
   blinkTimer: number;
   isBlinking: boolean;
 }
@@ -77,6 +88,7 @@ interface IsometricCanvasProps {
   robotState: { x: number; y: number; height: number; dir: Direction };
   isSimulating: boolean;
   activeAction?: string;
+  executionStepCount?: number;
   onTileClick?: (x: number, y: number) => void;
   isVictory?: boolean;
   celebratingVictory?: boolean;
@@ -133,6 +145,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
   robotState,
   isSimulating,
   activeAction,
+  executionStepCount = 0,
   isVictory = false,
   celebratingVictory = false,
   onManualAction,
@@ -152,9 +165,27 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
   // Camera & view mode
   const [perspectiveMode, setPerspectiveMode] = useState<'ISO' | 'TOP_DOWN'>('ISO');
   const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panRef = useRef({ x: 0, y: 0 });
   const [rotationAngle, setRotationAngle] = useState(0); // 0, 90, 180, 270
   const [showDPad, setShowDPad] = useState(false);
+  const [isGreetingVoice, setIsGreetingVoice] = useState(false);
+  const greetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (greetTimerRef.current) clearTimeout(greetTimerRef.current);
+    };
+  }, []);
+
+  const triggerOdibotVoiceGreet = useCallback(() => {
+    sounds.playRobotGreet();
+    setIsGreetingVoice(true);
+    if (greetTimerRef.current) clearTimeout(greetTimerRef.current);
+    greetTimerRef.current = setTimeout(() => {
+      setIsGreetingVoice(false);
+      greetTimerRef.current = null;
+    }, 900);
+  }, []);
 
   // Drag pan
   const isDraggingRef = useRef(false);
@@ -180,7 +211,17 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
     targetAngle: DIR_ANGLES[robotState.dir],
     currentAngle: DIR_ANGLES[robotState.dir],
     jumpArc: 0,
+    squashX: 1,
     squashY: 1,
+    leanAngle: 0,
+    stridePhase: 0,
+    landingBounce: 0,
+    actionPulse: 0,
+    commandPulse: 0,
+    commandLabel: '',
+    lastActionType: '',
+    pendingBurst: null,
+    trailCooldown: 0,
     blinkTimer: 2,
     isBlinking: false,
   });
@@ -192,6 +233,8 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
   const victoryElapsedRef = useRef<number>(0);
   const animTimeRef = useRef<number>(0);
   const prevRobotStateRef = useRef(robotState);
+  const prevTilesRef = useRef(tiles);
+  const prevStepCountRef = useRef(executionStepCount);
 
   // Track footprints
   useEffect(() => {
@@ -293,6 +336,14 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
       r.isMoving = false;
       r.isTurning = false;
       r.isJumping = false;
+      r.jumpArc = 0;
+      r.squashX = 1;
+      r.squashY = 1;
+      r.leanAngle = 0;
+      r.landingBounce = 0;
+      r.actionPulse = 0;
+      r.pendingBurst = null;
+      prevTilesRef.current = tiles;
       return;
     }
 
@@ -329,8 +380,58 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
       r.isMoving = true;
       r.isJumping = activeAction === 'JUMP';
       r.animProgress = 0;
+      r.trailCooldown = 0;
+      r.pendingBurst = r.isJumping ? 'JUMP' : 'MOVE';
     }
-  }, [robotState, activeAction]);
+  }, [robotState, activeAction, tiles]);
+
+  // Trigger expressive collect / switch particle animations whenever tiles change on those actions
+  useEffect(() => {
+    if (prevTilesRef.current === tiles) return;
+    prevTilesRef.current = tiles;
+    const r = visualRobotRef.current;
+    if (activeAction === 'COLLECT') {
+      r.actionPulse = 1;
+      r.lastActionType = 'COLLECT';
+      r.pendingBurst = 'COLLECT';
+    } else if (activeAction === 'TOGGLE_SWITCH') {
+      r.actionPulse = 1;
+      r.lastActionType = 'TOGGLE_SWITCH';
+      r.pendingBurst = 'SWITCH';
+    }
+  }, [tiles, activeAction]);
+
+  // Trigger command-processing pulse on EVERY executed code step (including REPEAT, IF, SET_VAR, F1/F2, MOVE)
+  useEffect(() => {
+    if (executionStepCount === prevStepCountRef.current) return;
+    prevStepCountRef.current = executionStepCount;
+    if (!isSimulating || executionStepCount <= 0) return;
+
+    const r = visualRobotRef.current;
+    r.commandPulse = 1;
+
+    if (activeAction === 'CALL_F1') r.commandLabel = 'F1';
+    else if (activeAction === 'CALL_F2') r.commandLabel = 'F2';
+    else if (activeAction === 'REPEAT' || activeAction === 'WHILE_VAR') r.commandLabel = '↻';
+    else if (activeAction === 'IF_VAR' || activeAction === 'IF_COLOR' || activeAction === 'IF_OBSTACLE') r.commandLabel = 'IF';
+    else if (activeAction === 'SET_VAR' || activeAction === 'CHANGE_VAR') r.commandLabel = 'X=';
+    else if (activeAction === 'READ_LIST') r.commandLabel = '[ ]';
+    else r.commandLabel = '▶';
+
+    if (
+      activeAction === 'SET_VAR' ||
+      activeAction === 'CHANGE_VAR' ||
+      activeAction === 'CALL_F1' ||
+      activeAction === 'CALL_F2' ||
+      THINKING_ACTIONS.has(activeAction || '')
+    ) {
+      r.actionPulse = Math.max(r.actionPulse, 0.72);
+      r.lastActionType = activeAction || 'COMMAND';
+      if (!r.pendingBurst) {
+        r.pendingBurst = 'COMMAND';
+      }
+    }
+  }, [executionStepCount, isSimulating, activeAction]);
 
   // Victory celebration fireworks & jump trigger
   useEffect(() => {
@@ -361,7 +462,6 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
     activeAction,
     victoryActive,
     zoom,
-    pan,
     rotationAngle,
     perspectiveMode,
     activeSkin,
@@ -374,7 +474,6 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
     activeAction,
     victoryActive,
     zoom,
-    pan,
     rotationAngle,
     perspectiveMode,
     activeSkin,
@@ -465,11 +564,11 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
         activeAction: curActiveAction,
         victoryActive: curVictory,
         zoom: curZoom,
-        pan: curPan,
         rotationAngle: curRotAngle,
         perspectiveMode: curPerspective,
         activeSkin: curSkin,
       } = renderStateRef.current;
+      const curPan = panRef.current;
 
       if (curVictory) {
         victoryElapsedRef.current += dt;
@@ -582,10 +681,20 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
         }
       }
 
-      // Update robot visual state lerp
+      // Update robot visual state lerp & expressive motion kinematics
       const r = visualRobotRef.current;
+      if (r.landingBounce > 0) {
+        r.landingBounce = Math.max(0, r.landingBounce - dt * 4.5);
+      }
+      if (r.actionPulse > 0) {
+        r.actionPulse = Math.max(0, r.actionPulse - dt * 2.2);
+      }
+      if (r.commandPulse > 0) {
+        r.commandPulse = Math.max(0, r.commandPulse - dt * 2.5);
+      }
+
       if (r.animProgress < 1) {
-        const animSpeed = curSimulating ? 5.5 : 7.0;
+        const animSpeed = r.isJumping ? (curSimulating ? 4.4 : 5.4) : curSimulating ? 5.5 : 7.0;
         r.animProgress = Math.min(1, r.animProgress + dt * animSpeed);
 
         const t = r.animProgress;
@@ -593,28 +702,50 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
 
         if (r.isMoving) {
           r.currentAngle = r.targetAngle;
+          r.stridePhase += dt * 22;
           if (r.isJumping) {
-            r.jumpArc = Math.sin(t * Math.PI) * 26;
-            r.squashY = 1 + Math.sin(t * Math.PI) * 0.25;
+            r.jumpArc = Math.sin(t * Math.PI) * 32;
+            const stretch = Math.sin(t * Math.PI);
+            r.squashY = 1 + stretch * 0.22;
+            r.squashX = 1 - stretch * 0.1;
+            r.leanAngle = Math.cos(t * Math.PI) * 0.14;
           } else {
-            r.jumpArc = Math.sin(t * Math.PI) * 5;
-            r.squashY = 1;
+            r.jumpArc = Math.abs(Math.sin(t * Math.PI * 2)) * 5.5;
+            r.squashY = 1 + Math.sin(t * Math.PI) * 0.06;
+            r.squashX = 1 - Math.sin(t * Math.PI) * 0.03;
+            r.leanAngle = Math.sin(t * Math.PI) * 0.11;
           }
         }
 
         if (r.isTurning) {
           r.currentAngle = r.fromAngle + (r.targetAngle - r.fromAngle) * ease;
+          const turnDelta = r.targetAngle - r.fromAngle;
+          r.leanAngle = Math.sin(t * Math.PI) * Math.sign(turnDelta || 1) * 0.12;
+          r.squashY = 1 + Math.sin(t * Math.PI) * 0.06;
+          r.squashX = 1 - Math.sin(t * Math.PI) * 0.04;
         }
 
         if (r.animProgress >= 1) {
+          if (r.isJumping) {
+            r.landingBounce = 1;
+            r.pendingBurst = 'LAND';
+          }
           r.isMoving = false;
           r.isJumping = false;
           r.isTurning = false;
           r.currentAngle = r.targetAngle;
           r.jumpArc = 0;
+          r.squashX = 1;
           r.squashY = 1;
+          r.leanAngle = 0;
         }
       }
+
+      // Compute final squash-and-stretch including landing cushion bounce
+      const bounceSquash = r.landingBounce > 0 ? Math.sin(r.landingBounce * Math.PI) * 0.18 : 0;
+      const actionLift = r.actionPulse > 0 ? Math.sin(r.actionPulse * Math.PI) * 7 : 0;
+      const finalScaleY = r.squashY - bounceSquash;
+      const finalScaleX = r.squashX + bounceSquash * 0.85;
 
       // Interpolate current robot grid pos
       const t = r.animProgress;
@@ -624,6 +755,67 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
       const curH = r.fromH + (r.gridH - r.fromH) * ease;
 
       const robotScreen = toScreen(curX, curY, curH);
+
+      // Emit world-synced screen-space motion & action particles at Odibot's exact rendered position
+      const rxScreen = centerX + robotScreen.x * effectiveZoom;
+      const ryScreen = centerY + (robotScreen.y - r.jumpArc - actionLift) * effectiveZoom;
+
+      if (r.pendingBurst) {
+        const burst = r.pendingBurst;
+        r.pendingBurst = null;
+        if (burst === 'MOVE') {
+          spawnParticles(rxScreen, ryScreen + 2, 4, [curSkin.visorColor, curSkin.accentColor], 'circle');
+        } else if (burst === 'JUMP') {
+          spawnParticles(rxScreen, ryScreen + 4, 8, [curSkin.thrusterColor, '#FDE047', curSkin.visorColor], 'spark');
+        } else if (burst === 'LAND') {
+          spawnParticles(rxScreen, ryScreen + 2, 7, [curSkin.visorColor, curSkin.shellLightColor], 'circle');
+        } else if (burst === 'COLLECT') {
+          spawnParticles(rxScreen, ryScreen - 16 * effectiveZoom, 14, ['#22D3EE', '#67E8F9', '#FDE047', '#FFFFFF'], 'star');
+        } else if (burst === 'SWITCH') {
+          spawnParticles(rxScreen, ryScreen - 8 * effectiveZoom, 12, ['#10B981', '#FDE047', '#34D399'], 'spark');
+          fireworkRingsRef.current.push({
+            x: rxScreen,
+            y: ryScreen - 4 * effectiveZoom,
+            radius: 6,
+            maxRadius: 34 * effectiveZoom,
+            color: '#10B981',
+            alpha: 0.85,
+          });
+        } else if (burst === 'COMMAND') {
+          spawnParticles(rxScreen, ryScreen - 34 * effectiveZoom, 6, [curSkin.accentColor, curSkin.visorColor, '#E879F9'], 'spark');
+          fireworkRingsRef.current.push({
+            x: rxScreen,
+            y: ryScreen - 36 * effectiveZoom,
+            radius: 3,
+            maxRadius: 20 * effectiveZoom,
+            color: curSkin.accentColor,
+            alpha: 0.75,
+          });
+        }
+      }
+
+      // Continuous jetpack spark trail while mid-jump
+      if (r.isJumping && r.animProgress > 0.08 && r.animProgress < 0.85) {
+        r.trailCooldown -= dt;
+        if (r.trailCooldown <= 0 && particlesRef.current.length < 280) {
+          r.trailCooldown = 0.045;
+          particlesRef.current.push({
+            x: rxScreen + (Math.random() - 0.5) * 10 * effectiveZoom,
+            y: ryScreen - 4 * effectiveZoom,
+            vx: (Math.random() - 0.5) * 0.9,
+            vy: 1.2 + Math.random() * 1.4,
+            color: Math.random() > 0.4 ? '#FBBF24' : curSkin.visorColor,
+            size: 2.3,
+            alpha: 0.95,
+            life: 0,
+            maxLife: 18,
+            gravity: 0.04,
+            drag: 0.96,
+            shape: 'circle',
+          });
+        }
+      }
+
       items.push({
         type: 'robot',
         gx: curX,
@@ -942,9 +1134,10 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
         ctx.fill();
       };
 
-      // Helper to draw Kodi robot
+      // Helper to draw ultra-cute chibi Odibot with 5 distinct costume shapes & expressive animations
       const drawRobot = (screenX: number, screenY: number) => {
         const angle = r.currentAngle;
+        const shape = curSkin.shape;
 
         // Victory Jump & Cheer Kinematics
         const vPhase = curVictory ? (victoryElapsedRef.current * 2.4) % 1 : 0;
@@ -953,313 +1146,908 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
         const victoryScaleY = curVictory ? (vJumpCurve < 0.12 ? 0.88 : 1 + vJumpCurve * 0.12) : 1;
         const victoryScaleX = curVictory ? (vJumpCurve < 0.12 ? 1.12 : 1 - vJumpCurve * 0.06) : 1;
         const victoryWobble = curVictory ? Math.sin(victoryElapsedRef.current * 6.5) * 0.12 : 0;
+        const isHappyFace = curVictory || (r.actionPulse > 0.25 && r.lastActionType === 'COLLECT');
+        const isProcessingCode = curSimulating && !curVictory;
 
         ctx.save();
-        ctx.translate(screenX, screenY - r.jumpArc);
+        ctx.translate(screenX, screenY - r.jumpArc - actionLift);
 
         if (curPerspective === 'TOP_DOWN') {
-          // --- 2D Top-Down Kodi Rover ---
-          // Pulsing golden victory aura or purple/cyan thinking radar under robot
+          // --- 2D Top-Down Cute Chibi Robot with Costume Shape ---
           if (curVictory) {
-            const auraRadius = 18 + Math.sin(victoryElapsedRef.current * 8) * 4;
+            const auraRadius = 19 + Math.sin(victoryElapsedRef.current * 8) * 4;
             ctx.beginPath();
             ctx.arc(0, 0, auraRadius, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)';
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.85)';
             ctx.lineWidth = 2.5;
             ctx.stroke();
-          } else if (curThinking) {
-            const thinkPulse = (Math.sin(animTimeRef.current * 10) + 1) * 0.5;
+          } else if (isProcessingCode) {
+            const procPulse = (Math.sin(animTimeRef.current * 10) + 1) * 0.5;
             ctx.save();
-            ctx.rotate(animTimeRef.current * 5);
+            ctx.rotate(animTimeRef.current * (curThinking ? 5.5 : 3.8));
             ctx.beginPath();
-            ctx.arc(0, 0, 19, 0, Math.PI * 1.25);
-            ctx.strokeStyle = `rgba(192, 132, 252, ${0.65 + thinkPulse * 0.35})`;
-            ctx.lineWidth = 2.5;
+            ctx.arc(0, 0, 20 + r.commandPulse * 2.5, 0, Math.PI * 1.1);
+            ctx.strokeStyle = curThinking ? `rgba(192, 132, 252, ${0.7 + procPulse * 0.3})` : curSkin.accentColor;
+            ctx.lineWidth = 2.4;
             ctx.lineCap = 'round';
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(0, 0, 20 + r.commandPulse * 2.5, Math.PI * 1.3, Math.PI * 1.85);
+            ctx.strokeStyle = curSkin.visorColor;
+            ctx.lineWidth = 2;
             ctx.stroke();
             ctx.restore();
           }
 
-          const topScale = curVictory ? 1 + vJumpCurve * 0.22 : 1;
+          const topScale = (curVictory ? 1 + vJumpCurve * 0.22 : 1) * (1 + (finalScaleY - 1) * 0.5);
           ctx.scale(topScale, topScale);
           ctx.rotate(angle + victoryWobble);
 
-          // Headlight beam
+          // Headlight scan beam cone
           ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(28, -12);
-          ctx.lineTo(28, 12);
+          ctx.moveTo(4, 0);
+          ctx.lineTo(31, -13);
+          ctx.lineTo(31, 13);
           ctx.closePath();
           ctx.fillStyle = curVictory
-            ? 'rgba(251, 191, 36, 0.32)'
+            ? 'rgba(251, 191, 36, 0.34)'
             : curThinking
-            ? 'rgba(192, 132, 252, 0.32)'
+            ? 'rgba(192, 132, 252, 0.34)'
+            : isProcessingCode
+            ? 'rgba(56, 189, 248, 0.3)'
             : 'rgba(34, 211, 238, 0.2)';
           ctx.fill();
 
-          // Body chassis
-          ctx.beginPath();
-          ctx.arc(0, 0, 14, 0, Math.PI * 2);
+          // Subtle rear anti-gravity hover glow when moving/jumping/processing
+          if (r.isMoving || r.isJumping || curVictory || isProcessingCode) {
+            const fLen = (r.isJumping || curVictory ? 8 : 5) + Math.sin(animTimeRef.current * 36) * 2.2;
+            ctx.fillStyle = r.isJumping || curVictory ? '#FDE047' : curSkin.thrusterColor;
+            ctx.globalAlpha = 0.78;
+            ctx.beginPath();
+            ctx.moveTo(-12, -4);
+            ctx.quadraticCurveTo(-14 - fLen, 0, -12, 4);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+
+          // Top-down Modern-Tech Back Accessories (Jet Wings / Quantum Blades / Orbital Ring)
+          if (shape === 'HOLODRONE_JET') {
+            ctx.fillStyle = '#334155';
+            ctx.strokeStyle = curSkin.accentColor;
+            ctx.lineWidth = 1.1;
+            ctx.beginPath();
+            ctx.moveTo(2, -10);
+            ctx.lineTo(-10, -18.5);
+            ctx.lineTo(-13, -10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(2, 10);
+            ctx.lineTo(-10, 18.5);
+            ctx.lineTo(-13, 10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          } else if (shape === 'QUANTUM_PRIME') {
+            ctx.fillStyle = curSkin.primaryColor;
+            ctx.strokeStyle = curSkin.accentColor;
+            ctx.lineWidth = 1.1;
+            ctx.beginPath();
+            ctx.moveTo(0, -11);
+            ctx.lineTo(-11, -18);
+            ctx.lineTo(-9, -9);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, 11);
+            ctx.lineTo(-11, 18);
+            ctx.lineTo(-9, 9);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
+
+          // Cute Stubby Floating Mitten Arms (Top-Down)
+          const armSwingTop = r.isMoving
+            ? Math.sin(r.stridePhase) * 3.2
+            : isProcessingCode
+            ? Math.sin(animTimeRef.current * 14) * 1.6
+            : Math.sin(animTimeRef.current * 3) * 0.8;
+
           ctx.fillStyle = curSkin.primaryColor;
+          ctx.strokeStyle = curSkin.visorColor;
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.ellipse(armSwingTop, -14, 4.5, 3.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.ellipse(-armSwingTop, 14, 4.5, 3.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Cute Chubby Rounded Pod Silhouette
+          const topChassisGrad = ctx.createLinearGradient(-13, -12, 14, 12);
+          topChassisGrad.addColorStop(0, curSkin.shellLightColor);
+          topChassisGrad.addColorStop(0.55, curSkin.primaryColor);
+          topChassisGrad.addColorStop(1, curSkin.secondaryColor);
+          ctx.beginPath();
+          ctx.ellipse(0.5, 0, 13.5, 12.2, 0, 0, Math.PI * 2);
+          ctx.fillStyle = topChassisGrad;
           ctx.fill();
           ctx.strokeStyle = curVictory
             ? '#FDE68A'
             : curThinking
             ? '#E879F9'
-            : curSkin.visorColor;
-          ctx.lineWidth = curThinking ? 2.5 : 2;
+            : curSkin.shellLightColor;
+          ctx.lineWidth = 1.8;
           ctx.stroke();
 
-          // Visor Face
+          // Top-down Modern-Tech Headgear Features
+          if (shape === 'PULSE_AUDIO') {
+            // Cyber Headphone Arch & Ear-Cups
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(-1, 0, 13.5, Math.PI * 0.55, Math.PI * 1.45);
+            ctx.stroke();
+            ctx.fillStyle = '#0F172A';
+            ctx.strokeStyle = curSkin.accentColor;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.ellipse(-1, -13, 3.2, 2.2, 0, 0, Math.PI * 2);
+            ctx.ellipse(-1, 13, 3.2, 2.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          } else if (shape === 'HOLODRONE_JET') {
+            // Dual Swept Stealth Cyber-Fins
+            ctx.fillStyle = '#334155';
+            ctx.strokeStyle = curSkin.accentColor;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, -10.5);
+            ctx.lineTo(-7, -15);
+            ctx.lineTo(-8, -8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0, 10.5);
+            ctx.lineTo(-7, 15);
+            ctx.lineTo(-8, 8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          } else if (shape === 'ORBITAL_SAT') {
+            // Orbital Gyro Ring & Optic Scanner Lens
+            ctx.strokeStyle = curSkin.accentColor;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.ellipse(-2, 0, 7, 15.5, 0.2, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = curSkin.accentColor;
+            ctx.beginPath();
+            ctx.arc(-2, -15, 2.2, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (shape === 'QUANTUM_PRIME') {
+            // Mecha V-Fin Crest Top View
+            ctx.strokeStyle = '#FEF08A';
+            ctx.fillStyle = curSkin.accentColor;
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            ctx.moveTo(3, 0);
+            ctx.lineTo(-5, -10);
+            ctx.lineTo(-3, 0);
+            ctx.lineTo(-5, 10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
+
+          // Glossy Obsidian Oval Visor
           ctx.beginPath();
-          ctx.arc(4, 0, 8, 0, Math.PI * 2);
-          ctx.fillStyle = '#111827';
+          ctx.ellipse(6.2, 0, 5.8, 8.8, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#050914';
+          ctx.fill();
+          ctx.strokeStyle = isProcessingCode ? curSkin.accentColor : curSkin.visorColor;
+          ctx.lineWidth = 1.25;
+          ctx.stroke();
+
+          // Rosy Cheeks + Big Kawaii Eyes (Top-Down)
+          ctx.fillStyle = 'rgba(251, 113, 133, 0.55)';
+          ctx.beginPath();
+          ctx.ellipse(4.8, -6.2, 1.3, 2, 0, 0, Math.PI * 2);
+          ctx.ellipse(4.8, 6.2, 1.3, 2, 0, 0, Math.PI * 2);
           ctx.fill();
 
-          // Glowing Eyes
-          ctx.fillStyle = curVictory
-            ? '#FBBF24'
+          ctx.fillStyle = isHappyFace
+            ? '#FDE047'
             : curThinking
             ? '#E879F9'
             : curSkin.visorColor;
           ctx.beginPath();
-          ctx.arc(6, -3, 2, 0, Math.PI * 2);
-          ctx.arc(6, 3, 2, 0, Math.PI * 2);
+          ctx.ellipse(7.5, -3.5, 2.1, 2.9, -0.1, 0, Math.PI * 2);
+          ctx.ellipse(7.5, 3.5, 2.1, 2.9, 0.1, 0, Math.PI * 2);
           ctx.fill();
 
-          // Front pointer arrow
+          // Crisp Front Pointer Chevron
           ctx.beginPath();
-          ctx.moveTo(14, 0);
-          ctx.lineTo(9, -4);
-          ctx.lineTo(9, 4);
+          ctx.moveTo(18, 0);
+          ctx.lineTo(13, -4);
+          ctx.lineTo(13, 4);
           ctx.closePath();
-          ctx.fillStyle = curThinking ? '#C084FC' : '#F59E0B';
+          ctx.fillStyle = curThinking ? '#C084FC' : curSkin.accentColor;
           ctx.fill();
 
           ctx.restore();
           return;
         }
 
-        // --- 3D Isometric Odibot Robot ---
-        // Pulsing spotlight ring on tile surface (Victory gold or Thinking purple/cyan)
+        // --- 3D Isometric Cute Chibi Odibot with Costume Shape ---
+        // Floor Directional Holoprojector Ring & Chevron
+        ctx.save();
+        ctx.scale(1, 0.52);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.arc(0, 0, 18.5, -0.78, 0.78);
+        ctx.strokeStyle = curVictory
+          ? 'rgba(251, 191, 36, 0.88)'
+          : curThinking
+          ? 'rgba(192, 132, 252, 0.9)'
+          : curSkin.visorColor;
+        ctx.lineWidth = 2.4;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(23.5, 0);
+        ctx.lineTo(15.5, -5.5);
+        ctx.lineTo(17.5, 0);
+        ctx.lineTo(15.5, 5.5);
+        ctx.closePath();
+        ctx.fillStyle = curThinking ? '#C084FC' : curSkin.accentColor;
+        ctx.fill();
+        ctx.restore();
+
+        // Active Code-Processing Rotating Tech Ring on Floor
+        if (isProcessingCode) {
+          ctx.save();
+          ctx.scale(1, 0.52);
+          ctx.rotate(animTimeRef.current * (curThinking ? 5.2 : 3.6));
+          const ringR = 17 + r.commandPulse * 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, ringR, 0, Math.PI * 0.7);
+          ctx.strokeStyle = curThinking ? '#E879F9' : curSkin.accentColor;
+          ctx.lineWidth = 2.2;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(0, 0, ringR, Math.PI, Math.PI * 1.7);
+          ctx.strokeStyle = curSkin.visorColor;
+          ctx.lineWidth = 2.2;
+          ctx.stroke();
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(ringR, 0, 2.2, 0, Math.PI * 2);
+          ctx.arc(-ringR, 0, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Pulsing Victory Spotlight Ring
         if (curVictory) {
           const ringPulse = (Math.sin(victoryElapsedRef.current * 7) + 1) * 0.5;
           ctx.beginPath();
-          ctx.ellipse(0, 0, 16 + ringPulse * 6, 8 + ringPulse * 3, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, 0, 17 + ringPulse * 6, 8.5 + ringPulse * 3, 0, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(251, 191, 36, ${0.45 + ringPulse * 0.45})`;
           ctx.lineWidth = 2;
           ctx.stroke();
-        } else if (curThinking) {
-          const thinkRingPulse = (Math.sin(animTimeRef.current * 9) + 1) * 0.5;
+        }
+
+        // Dynamic Ground Shadow
+        const totalAirH = r.jumpArc + victoryHopHeight + actionLift;
+        const shadowShrink = Math.max(0.45, 1 - totalAirH / 54);
+        ctx.beginPath();
+        ctx.ellipse(0, 1, 12.5 * shadowShrink, 5.5 * shadowShrink, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
+        ctx.fill();
+
+        const processNod = isProcessingCode ? Math.sin(animTimeRef.current * 12) * 1.2 + r.commandPulse * 2 : 0;
+        const idleBob = curVictory
+          ? 0
+          : isProcessingCode
+          ? processNod
+          : Math.sin(animTimeRef.current * 3.8) * 2.1;
+        ctx.translate(0, idleBob - victoryHopHeight - 4);
+        ctx.scale(finalScaleX * victoryScaleX, finalScaleY * victoryScaleY);
+        ctx.rotate(
+          (curVictory ? victoryWobble * 0.6 : 0) +
+          (isProcessingCode ? Math.sin(animTimeRef.current * 8) * 0.04 : 0) +
+          r.leanAngle
+        );
+
+        // Chubby Mini Pod Torso Proportions (Kawaii 1.35:1 head-to-body ratio)
+        const bodyW = 22;
+        const bodyH = 18;
+        const bodyTopY = -bodyH - 2;
+
+        // Subtle Anti-Gravity Hover Halo Glow beneath chubby pod
+        const hoverGlowColor = r.isJumping || curVictory ? '#FDE047' : curSkin.thrusterColor;
+        const hoverPulse = 0.28 + Math.sin(animTimeRef.current * (isProcessingCode ? 18 : 8)) * 0.1;
+        ctx.beginPath();
+        ctx.ellipse(0, 0.5, 6.5, 2.1, 0, 0, Math.PI * 2);
+        ctx.fillStyle = hoverGlowColor;
+        ctx.globalAlpha = hoverPulse;
+        ctx.fill();
+
+        const centerGlowH = 4 + (r.isJumping || curVictory ? 4.5 : isProcessingCode ? 2.5 + Math.sin(animTimeRef.current * 20) * 1 : Math.sin(animTimeRef.current * 12) * 0.9);
+        ctx.globalAlpha = 0.65;
+        ctx.beginPath();
+        ctx.moveTo(-3.2, -2);
+        ctx.lineTo(0, -2 + centerGlowH);
+        ctx.lineTo(3.2, -2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // --- MODERN-TECH BACK ACCESSORIES (Jet Wings / Quantum Energy Blades) ---
+        if (shape === 'HOLODRONE_JET') {
+          // Swept Micro-Thruster Stealth Jet Wings
+          ctx.fillStyle = '#334155';
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 1.1;
           ctx.beginPath();
-          ctx.ellipse(0, 0, 14 + thinkRingPulse * 5, 7 + thinkRingPulse * 2.5, 0, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(192, 132, 252, ${0.45 + thinkRingPulse * 0.45})`;
-          ctx.lineWidth = 1.8;
+          ctx.moveTo(-bodyW / 2 + 1, bodyTopY + 3);
+          ctx.lineTo(-bodyW / 2 - 9.5, bodyTopY - 2);
+          ctx.lineTo(-bodyW / 2 - 7, bodyTopY + 9);
+          ctx.lineTo(-bodyW / 2 + 1, bodyTopY + 9);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(bodyW / 2 - 1, bodyTopY + 3);
+          ctx.lineTo(bodyW / 2 + 9.5, bodyTopY - 2);
+          ctx.lineTo(bodyW / 2 + 7, bodyTopY + 9);
+          ctx.lineTo(bodyW / 2 - 1, bodyTopY + 9);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = curSkin.accentColor;
+          ctx.beginPath();
+          ctx.arc(-bodyW / 2 - 7.5, bodyTopY + 3.5, 1.5, 0, Math.PI * 2);
+          ctx.arc(bodyW / 2 + 7.5, bodyTopY + 3.5, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (shape === 'QUANTUM_PRIME') {
+          // Floating Quantum Energy Wing-Blades
+          ctx.fillStyle = curSkin.primaryColor;
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 1.15;
+          ctx.beginPath();
+          ctx.moveTo(-bodyW / 2, bodyTopY + 2);
+          ctx.lineTo(-bodyW / 2 - 10, bodyTopY - 5);
+          ctx.lineTo(-bodyW / 2 - 7.5, bodyTopY + 7);
+          ctx.lineTo(-bodyW / 2, bodyTopY + 9);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(bodyW / 2, bodyTopY + 2);
+          ctx.lineTo(bodyW / 2 + 10, bodyTopY - 5);
+          ctx.lineTo(bodyW / 2 + 7.5, bodyTopY + 7);
+          ctx.lineTo(bodyW / 2, bodyTopY + 9);
+          ctx.closePath();
+          ctx.fill();
           ctx.stroke();
         }
 
-        // Shadow (shrinks nicely as robot jumps high)
-        const shadowShrink = Math.max(0.5, 1 - victoryHopHeight / 48);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 11 * shadowShrink, 5 * shadowShrink, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        ctx.fill();
+        // Cute Stubby Floating Mitten Arms
+        const armSwing = r.isMoving
+          ? Math.sin(r.stridePhase) * 0.34
+          : isProcessingCode
+          ? Math.sin(animTimeRef.current * 14) * 0.18
+          : Math.sin(animTimeRef.current * 3) * 0.06;
+        const leftArmAngle = curVictory || r.isJumping
+          ? 2.25 + Math.sin(animTimeRef.current * 14) * 0.18
+          : r.actionPulse > 0.1
+          ? 0.95 + Math.sin(animTimeRef.current * 18) * 0.16
+          : 0.18 + armSwing;
+        const rightArmAngle = curVictory || r.isJumping
+          ? -2.25 - Math.sin(animTimeRef.current * 14) * 0.18
+          : isProcessingCode
+          ? -1.05 + Math.sin(animTimeRef.current * 12) * 0.18
+          : r.actionPulse > 0.1
+          ? -0.95
+          : -0.18 + armSwing;
 
-        const idleBob = curVictory
-          ? 0
-          : curThinking
-          ? Math.sin(animTimeRef.current * 9) * 1.4
-          : Math.sin(animTimeRef.current * 4) * 1.5;
-        ctx.translate(0, idleBob - victoryHopHeight);
-        ctx.scale(victoryScaleX, victoryScaleY);
-        if (curVictory) {
-          ctx.rotate(victoryWobble * 0.5);
-        } else if (curThinking) {
-          ctx.rotate(Math.sin(animTimeRef.current * 7) * 0.045);
-        }
+        const armGrad = ctx.createLinearGradient(-3, 0, 3, 11);
+        armGrad.addColorStop(0, curSkin.shellLightColor);
+        armGrad.addColorStop(0.55, curSkin.primaryColor);
+        armGrad.addColorStop(1, curSkin.secondaryColor);
 
-        const bodyW = 24;
-        const bodyH = 22;
+        const drawFloatingMittenArm = (hoverX: number, hoverY: number, armRot: number, side: -1 | 1) => {
+          ctx.save();
+          ctx.translate(hoverX, hoverY);
+          ctx.rotate(armRot);
 
-        // Jetpack (glowing thruster flames during victory jump!)
-        if (curVictory && vJumpCurve > 0.15) {
-          const flameLen = 5 + Math.random() * 6;
-          ctx.fillStyle = '#F59E0B';
           ctx.beginPath();
-          ctx.moveTo(-bodyW / 2 - 4, -bodyH + 16);
-          ctx.lineTo(-bodyW / 2 - 2, -bodyH + 16 + flameLen);
-          ctx.lineTo(-bodyW / 2, -bodyH + 16);
-          ctx.moveTo(bodyW / 2, -bodyH + 16);
-          ctx.lineTo(bodyW / 2 + 2, -bodyH + 16 + flameLen);
-          ctx.lineTo(bodyW / 2 + 4, -bodyH + 16);
+          ctx.ellipse(side * 0.4, 4.5, 3, 5.2, 0, 0, Math.PI * 2);
+          ctx.fillStyle = armGrad;
+          ctx.fill();
+          ctx.strokeStyle = curSkin.visorColor;
+          ctx.globalAlpha = 0.65;
+          ctx.lineWidth = 1.05;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+
+          ctx.beginPath();
+          ctx.arc(side * 0.8, 2.5, 1.1, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+          ctx.fill();
+          ctx.restore();
+        };
+
+        drawFloatingMittenArm(-bodyW / 2 - 2.6, bodyTopY + 5, leftArmAngle, -1);
+        drawFloatingMittenArm(bodyW / 2 + 2.6, bodyTopY + 5, rightArmAngle, 1);
+
+        // Chubby Cute Egg-Bean Torso
+        const torsoGrad = ctx.createLinearGradient(-bodyW / 2, bodyTopY, bodyW / 2, -2);
+        torsoGrad.addColorStop(0, curSkin.shellLightColor);
+        torsoGrad.addColorStop(0.52, curSkin.primaryColor);
+        torsoGrad.addColorStop(1, curSkin.secondaryColor);
+
+        ctx.beginPath();
+        ctx.moveTo(-bodyW / 2 + 1.5, bodyTopY + 3.5);
+        ctx.bezierCurveTo(-bodyW / 2 + 1.5, bodyTopY - 1, bodyW / 2 - 1.5, bodyTopY - 1, bodyW / 2 - 1.5, bodyTopY + 3.5);
+        ctx.bezierCurveTo(bodyW / 2, bodyTopY + 11, bodyW / 3 + 1.5, -2.2, 0, -2);
+        ctx.bezierCurveTo(-bodyW / 3 - 1.5, -2.2, -bodyW / 2, bodyTopY + 11, -bodyW / 2 + 1.5, bodyTopY + 3.5);
+        ctx.closePath();
+        ctx.fillStyle = torsoGrad;
+        ctx.fill();
+        ctx.strokeStyle = curVictory
+          ? '#FDE68A'
+          : isProcessingCode
+          ? curSkin.accentColor
+          : curSkin.shellLightColor;
+        ctx.lineWidth = curVictory || isProcessingCode ? 1.8 : 1.3;
+        ctx.stroke();
+
+        // Porcelain Specular Gloss Streak on Left Torso Curve
+        ctx.beginPath();
+        ctx.moveTo(-bodyW / 2 + 4.2, bodyTopY + 4);
+        ctx.bezierCurveTo(-bodyW / 2 + 4.2, bodyTopY + 9, -bodyW / 4, -5, -2.6, -4);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Sleek Chest Directive / Modern-Tech Module Indicator
+        if (isProcessingCode) {
+          ctx.beginPath();
+          drawRoundRect(ctx, -6, bodyTopY + 6.2, 12, 4.6, 2.3);
+          ctx.fillStyle = '#091124';
+          ctx.fill();
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 0.9;
+          ctx.stroke();
+
+          const ledSpeed = curThinking ? 12 : 9;
+          const activeLed = Math.floor(animTimeRef.current * ledSpeed) % 3;
+          for (let led = 0; led < 3; led++) {
+            ctx.fillStyle =
+              led === activeLed
+                ? curSkin.accentColor
+                : led === (activeLed + 1) % 3
+                ? curSkin.visorColor
+                : curThinking
+                ? '#E879F9'
+                : '#34D399';
+            ctx.beginPath();
+            ctx.arc(-3 + led * 3, bodyTopY + 8.5, led === activeLed ? 1.25 : 0.85, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (shape === 'PULSE_AUDIO') {
+          // 3-Bar Audio Equalizer
+          ctx.beginPath();
+          drawRoundRect(ctx, -5, bodyTopY + 6, 10, 5.2, 1.5);
+          ctx.fillStyle = '#091124';
+          ctx.fill();
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+          for (let b = 0; b < 3; b++) {
+            const barH = 1.6 + Math.abs(Math.sin(animTimeRef.current * 8 + b * 1.4)) * 2.2;
+            ctx.fillStyle = b === 1 ? curSkin.visorColor : curSkin.accentColor;
+            ctx.fillRect(-3.4 + b * 2.8, bodyTopY + 10.4 - barH, 1.5, barH);
+          }
+        } else if (shape === 'HOLODRONE_JET') {
+          // Stealth Hexagon Core
+          ctx.fillStyle = curSkin.accentColor;
+          ctx.beginPath();
+          ctx.moveTo(0, bodyTopY + 5.6);
+          ctx.lineTo(2.8, bodyTopY + 7.2);
+          ctx.lineTo(2.8, bodyTopY + 10.2);
+          ctx.lineTo(0, bodyTopY + 11.8);
+          ctx.lineTo(-2.8, bodyTopY + 10.2);
+          ctx.lineTo(-2.8, bodyTopY + 7.2);
+          ctx.closePath();
+          ctx.fill();
+        } else if (shape === 'ORBITAL_SAT') {
+          // Biosphere Radar Core
+          ctx.beginPath();
+          ctx.arc(0, bodyTopY + 8.5, 3, 0, Math.PI * 2);
+          ctx.fillStyle = '#091124';
+          ctx.fill();
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(0, bodyTopY + 8.5, 1.3, 0, Math.PI * 2);
+          ctx.fillStyle = curSkin.accentColor;
+          ctx.fill();
+        } else if (shape === 'QUANTUM_PRIME') {
+          // Diamond Quantum Prism
+          ctx.fillStyle = curSkin.accentColor;
+          ctx.beginPath();
+          ctx.moveTo(0, bodyTopY + 5.5);
+          ctx.lineTo(2.6, bodyTopY + 8.5);
+          ctx.lineTo(0, bodyTopY + 11.5);
+          ctx.lineTo(-2.6, bodyTopY + 8.5);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          const corePulse = (Math.sin(animTimeRef.current * 5) + 1) * 0.5;
+          const leafColor = isHappyFace ? '#34D399' : curSkin.accentColor;
+          ctx.beginPath();
+          ctx.arc(0, bodyTopY + 8.5, 3.1 + corePulse * 0.5, 0, Math.PI * 2);
+          ctx.fillStyle = leafColor;
+          ctx.globalAlpha = 0.25;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+
+          ctx.beginPath();
+          ctx.moveTo(0, bodyTopY + 6.2);
+          ctx.quadraticCurveTo(2.6, bodyTopY + 7.6, 0, bodyTopY + 10.8);
+          ctx.quadraticCurveTo(-2.6, bodyTopY + 7.6, 0, bodyTopY + 6.2);
+          ctx.closePath();
+          ctx.fillStyle = leafColor;
           ctx.fill();
         }
 
-        ctx.fillStyle = '#4B5563';
-        ctx.fillRect(-bodyW / 2 - 4, -bodyH + 4, 4, 12);
-        ctx.fillRect(bodyW / 2, -bodyH + 4, 4, 12);
+        // Big Round Kawaii Chibi Dome Head
+        const headW = 30;
+        const headH = 22;
+        const headY = bodyTopY - headH - 2;
 
-        // Body base
+        // --- MODERN-TECH HEADGEAR BEHIND/ON MAIN DOME ---
+        const helmetGrad = ctx.createLinearGradient(-headW / 2, headY, headW / 2, headY + headH);
+        helmetGrad.addColorStop(0, curSkin.shellLightColor);
+        helmetGrad.addColorStop(0.5, curSkin.primaryColor);
+        helmetGrad.addColorStop(1, curSkin.secondaryColor);
+
+        if (shape === 'PULSE_AUDIO') {
+          // Cyber Headphone Arch curving over Head
+          ctx.beginPath();
+          ctx.arc(0, headY + 11, headW / 2 + 2.2, Math.PI * 1.02, Math.PI * 1.98);
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 3.6;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(0, headY + 11, headW / 2 + 2.2, Math.PI * 1.18, Math.PI * 1.82);
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        } else if (shape === 'HOLODRONE_JET') {
+          // Dual Swept Stealth Cyber Radar Fins
+          ctx.fillStyle = '#334155';
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.moveTo(-headW / 2 + 3.5, headY + 6.5);
+          ctx.lineTo(-headW / 2 - 2.5, headY - 6.5);
+          ctx.lineTo(-headW / 2 + 8, headY + 1.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(headW / 2 - 3.5, headY + 6.5);
+          ctx.lineTo(headW / 2 + 2.5, headY - 6.5);
+          ctx.lineTo(headW / 2 - 8, headY + 1.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        } else if (shape === 'ORBITAL_SAT') {
+          // Back Arc of Tilted Orbital Gyro Ring
+          ctx.beginPath();
+          ctx.ellipse(0, headY + 1, 16, 4.5, -0.06, Math.PI, Math.PI * 2);
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.globalAlpha = 0.55;
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+
+        // Main Big Round Chibi Dome Head
         ctx.beginPath();
-        drawRoundRect(ctx, -bodyW / 2, -bodyH, bodyW, bodyH, 6);
-        ctx.fillStyle = curSkin.primaryColor;
+        ctx.moveTo(-headW / 2, headY + 12);
+        ctx.bezierCurveTo(-headW / 2, headY + 0.5, -headW / 4, headY - 1.5, 0, headY - 1.5);
+        ctx.bezierCurveTo(headW / 4, headY - 1.5, headW / 2, headY + 0.5, headW / 2, headY + 12);
+        ctx.bezierCurveTo(headW / 2, headY + 19.5, headW / 3, headY + headH, 0, headY + headH);
+        ctx.bezierCurveTo(-headW / 3, headY + headH, -headW / 2, headY + 19.5, -headW / 2, headY + 12);
+        ctx.closePath();
+        ctx.fillStyle = helmetGrad;
         ctx.fill();
         ctx.strokeStyle = curVictory
           ? '#FDE68A'
           : curThinking
-          ? '#E879F9'
-          : curSkin.visorColor;
-        ctx.lineWidth = curVictory || curThinking ? 2 : 1.5;
+          ? '#C084FC'
+          : curSkin.shellLightColor;
+        ctx.lineWidth = 1.6;
         ctx.stroke();
 
-        // Chest badge (turns into animated 3-LED CPU scanner when thinking)
-        if (curThinking) {
+        // Foreground Headphone Ear-Cups / Orbital Gyro Front / Mecha V-Fin Crest
+        if (shape === 'PULSE_AUDIO') {
           ctx.fillStyle = '#0F172A';
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 1.2;
           ctx.beginPath();
-          drawRoundRect(ctx, -bodyW / 4 - 1, -bodyH + 5, bodyW / 2 + 2, 8, 2);
+          drawRoundRect(ctx, -headW / 2 - 3.4, headY + 7.5, 4.6, 8.5, 2.2);
+          drawRoundRect(ctx, headW / 2 - 1.2, headY + 7.5, 4.6, 8.5, 2.2);
           ctx.fill();
-
-          const activeLed = Math.floor(animTimeRef.current * 8) % 3;
-          for (let led = 0; led < 3; led++) {
-            ctx.fillStyle =
-              led === activeLed
-                ? '#E879F9'
-                : led === (activeLed + 1) % 3
-                ? '#38BDF8'
-                : '#475569';
-            ctx.beginPath();
-            ctx.arc(-4 + led * 4, -bodyH + 9, 1.4, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        } else {
-          ctx.fillStyle = '#F59E0B';
+          ctx.stroke();
+          ctx.fillStyle = curSkin.accentColor;
           ctx.beginPath();
-          drawRoundRect(ctx, -bodyW / 4, -bodyH + 6, bodyW / 2, 7, 2);
+          ctx.arc(-headW / 2 - 1.1, headY + 11.7, 1.3, 0, Math.PI * 2);
+          ctx.arc(headW / 2 + 1.1, headY + 11.7, 1.3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (shape === 'ORBITAL_SAT') {
+          // Front Arc of Orbital Gyro + Micro Satellite & Right Optic Scanner
+          ctx.beginPath();
+          ctx.ellipse(0, headY + 1, 16, 4.5, -0.06, 0, Math.PI);
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+          const satAngle = animTimeRef.current * 2.5;
+          const satX = Math.cos(satAngle) * 16;
+          const satY = headY + 1 + Math.sin(satAngle) * 4.5;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(satX, satY, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+          // Right Temple Optic Pod
+          ctx.fillStyle = '#0F172A';
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.arc(headW / 2 + 0.5, headY + 11, 2.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = curSkin.accentColor;
+          ctx.beginPath();
+          ctx.arc(headW / 2 + 0.5, headY + 11, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (shape === 'QUANTUM_PRIME') {
+          // Sleek Futuristic Mecha V-Fin Crest
+          ctx.beginPath();
+          ctx.moveTo(0, headY - 0.5);
+          ctx.lineTo(-11.5, headY - 8.5);
+          ctx.lineTo(-7.5, headY - 1.5);
+          ctx.lineTo(0, headY + 1);
+          ctx.lineTo(7.5, headY - 1.5);
+          ctx.lineTo(11.5, headY - 8.5);
+          ctx.closePath();
+          ctx.fillStyle = curSkin.shellLightColor;
+          ctx.fill();
+          ctx.strokeStyle = '#FEF08A';
+          ctx.lineWidth = 1.1;
+          ctx.stroke();
+          ctx.fillStyle = curSkin.accentColor;
+          ctx.beginPath();
+          ctx.arc(0, headY - 0.2, 2.1, 0, Math.PI * 2);
           ctx.fill();
         }
 
-        // Visor Face
-        const headW = 26;
-        const headH = 18;
-        const headY = -bodyH - headH + 4;
-
+        // Porcelain Crown Specular Highlight
         ctx.beginPath();
-        drawRoundRect(ctx, -headW / 2, headY, headW, headH, 6);
-        ctx.fillStyle = '#111827';
-        ctx.fill();
-        ctx.strokeStyle = curVictory
-          ? '#FBBF24'
-          : curThinking
-          ? '#A855F7'
-          : curSkin.primaryColor;
+        ctx.moveTo(-9, headY + 3);
+        ctx.quadraticCurveTo(-2, headY, 6, headY + 1);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.82)';
         ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
         ctx.stroke();
 
+        // Glossy Obsidian Kawaii Visor
+        ctx.beginPath();
+        ctx.moveTo(-headW / 2 + 2.4, headY + 12);
+        ctx.bezierCurveTo(-headW / 2 + 2.4, headY + 4, -headW / 4 + 0.8, headY + 2.2, 0, headY + 2.2);
+        ctx.bezierCurveTo(headW / 4 - 0.8, headY + 2.2, headW / 2 - 2.4, headY + 4, headW / 2 - 2.4, headY + 12);
+        ctx.bezierCurveTo(headW / 2 - 2.4, headY + 18, headW / 4, headY + headH - 2, 0, headY + headH - 2);
+        ctx.bezierCurveTo(-headW / 4, headY + headH - 2, -headW / 2 + 2.4, headY + 18, -headW / 2 + 2.4, headY + 12);
+        ctx.closePath();
+        ctx.fillStyle = '#050914';
+        ctx.fill();
+        ctx.strokeStyle = isProcessingCode ? curSkin.accentColor : curSkin.secondaryColor;
+        ctx.lineWidth = 1.1;
+        ctx.stroke();
+
+        // Sweeping Holographic Visor Telemetry Scanline while processing commands
+        if (isProcessingCode) {
+          const scanRatio = (Math.sin(animTimeRef.current * 8.5) + 1) * 0.5;
+          const scanX = -headW / 2 + 4.5 + scanRatio * (headW - 13);
+          ctx.fillStyle = curThinking ? 'rgba(232, 121, 249, 0.28)' : 'rgba(56, 189, 248, 0.26)';
+          ctx.fillRect(scanX, headY + 4.5, 4, headH - 8);
+        }
+
+        // Curved Glass Sheen Reflection
+        ctx.beginPath();
+        ctx.moveTo(-headW / 2 + 5.5, headY + 5);
+        ctx.lineTo(-headW / 2 + 10, headY + 4.5);
+        ctx.lineTo(-headW / 2 + 6.5, headY + headH - 4.5);
+        ctx.lineTo(-headW / 2 + 4, headY + headH - 5.5);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fill();
+
         const eyeOffsetRatio = Math.sin(angle);
-        const thinkingScanOffset = curThinking ? Math.sin(animTimeRef.current * 10) * 1.8 : 0;
-        const eyeXCenter = eyeOffsetRatio * 4 + thinkingScanOffset;
+        const thinkingScanOffset = isProcessingCode ? Math.sin(animTimeRef.current * 10) * 1.4 : 0;
+        const eyeXCenter = eyeOffsetRatio * 3.5 + thinkingScanOffset;
+
+        // Cute Rosy Cheek Blushes inside Visor!
+        ctx.fillStyle = shape === 'HOLODRONE_JET' ? 'rgba(244, 114, 182, 0.62)' : 'rgba(251, 113, 133, 0.56)';
+        ctx.beginPath();
+        ctx.ellipse(eyeXCenter - 8.5, headY + 15.2, 2.4, 1.2, 0, 0, Math.PI * 2);
+        ctx.ellipse(eyeXCenter + 8.5, headY + 15.2, 2.4, 1.2, 0, 0, Math.PI * 2);
+        ctx.fill();
 
         r.blinkTimer -= dt;
         if (r.blinkTimer <= 0) {
           r.isBlinking = true;
-          if (r.blinkTimer <= -0.15) {
+          if (r.blinkTimer <= -0.14) {
             r.isBlinking = false;
-            r.blinkTimer = 2.5 + Math.random() * 2;
+            r.blinkTimer = 2.4 + Math.random() * 2.2;
           }
         }
 
-        ctx.fillStyle = curThinking ? '#E879F9' : curSkin.visorColor;
-        if (curVictory) {
-          // Happy "^ ^" celebratory eyes
-          ctx.strokeStyle = '#FBBF24';
-          ctx.lineWidth = 2;
+        // Big Sparkly Kawaii Digital Eyes
+        if (isHappyFace) {
+          ctx.strokeStyle = '#FDE047';
+          ctx.lineWidth = 2.4;
+          ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.arc(eyeXCenter - 4, headY + 10, 3.2, Math.PI * 1.15, Math.PI * 1.85);
+          ctx.arc(eyeXCenter - 5.5, headY + 13, 3.4, Math.PI * 1.12, Math.PI * 1.88);
           ctx.stroke();
           ctx.beginPath();
-          ctx.arc(eyeXCenter + 4, headY + 10, 3.2, Math.PI * 1.15, Math.PI * 1.85);
+          ctx.arc(eyeXCenter + 5.5, headY + 13, 3.4, Math.PI * 1.12, Math.PI * 1.88);
           ctx.stroke();
         } else if (curThinking) {
-          // Focused logic-scanning eyes (glowing cyan-violet bars/dots)
-          ctx.fillStyle = Math.sin(animTimeRef.current * 12) > 0 ? '#E879F9' : '#38BDF8';
+          const thinkEyeColor = Math.sin(animTimeRef.current * 12) > 0 ? '#E879F9' : '#38BDF8';
+          ctx.fillStyle = thinkEyeColor;
           ctx.beginPath();
-          ctx.arc(eyeXCenter - 4, headY + 8, 2.7, 0, Math.PI * 2);
-          ctx.arc(eyeXCenter + 4, headY + 8, 2.7, 0, Math.PI * 2);
+          ctx.ellipse(eyeXCenter - 5.4, headY + 11.4, 3.4, 2.5, -0.12, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(eyeXCenter + 5.4, headY + 11.4, 3.4, 3.1, 0.12, 0, Math.PI * 2);
           ctx.fill();
 
           ctx.fillStyle = '#FFFFFF';
           ctx.beginPath();
-          ctx.arc(eyeXCenter - 4 + thinkingScanOffset * 0.35, headY + 7.5, 1, 0, Math.PI * 2);
-          ctx.arc(eyeXCenter + 4 + thinkingScanOffset * 0.35, headY + 7.5, 1, 0, Math.PI * 2);
+          ctx.arc(eyeXCenter - 6.3, headY + 10.3, 1.1, 0, Math.PI * 2);
+          ctx.arc(eyeXCenter + 4.5, headY + 10.1, 1.2, 0, Math.PI * 2);
           ctx.fill();
         } else if (r.isBlinking) {
-          ctx.fillRect(eyeXCenter - 6, headY + 8, 4, 1.5);
-          ctx.fillRect(eyeXCenter + 2, headY + 8, 4, 1.5);
-        } else {
+          ctx.strokeStyle = curSkin.visorColor;
+          ctx.lineWidth = 1.7;
+          ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.arc(eyeXCenter - 4, headY + 8, 3, 0, Math.PI * 2);
-          ctx.arc(eyeXCenter + 4, headY + 8, 3, 0, Math.PI * 2);
+          ctx.moveTo(eyeXCenter - 7.8, headY + 11.5);
+          ctx.lineTo(eyeXCenter - 3, headY + 11.5);
+          ctx.moveTo(eyeXCenter + 3, headY + 11.5);
+          ctx.lineTo(eyeXCenter + 7.8, headY + 11.5);
+          ctx.stroke();
+        } else {
+          const eyeColor = isProcessingCode ? curSkin.accentColor : curSkin.visorColor;
+          const eyeRY = r.isJumping ? 3.5 : 3.2;
+          ctx.fillStyle = eyeColor;
+          ctx.beginPath();
+          ctx.ellipse(eyeXCenter - 5.4, headY + 11.4, 3.4, eyeRY, -0.1, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(eyeXCenter + 5.4, headY + 11.4, 3.4, eyeRY, 0.1, 0, Math.PI * 2);
           ctx.fill();
 
+          // Cute white sparkle highlights
           ctx.fillStyle = '#FFFFFF';
           ctx.beginPath();
-          ctx.arc(eyeXCenter - 4 + 1, headY + 8 - 1, 1, 0, Math.PI * 2);
-          ctx.arc(eyeXCenter + 4 + 1, headY + 8 - 1, 1, 0, Math.PI * 2);
+          ctx.arc(eyeXCenter - 6.3, headY + 10.1, 1.25, 0, Math.PI * 2);
+          ctx.arc(eyeXCenter + 4.5, headY + 10.1, 1.25, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(eyeXCenter - 4.4, headY + 12.6, 0.6, 0, Math.PI * 2);
+          ctx.arc(eyeXCenter + 6.4, headY + 12.6, 0.6, 0, Math.PI * 2);
           ctx.fill();
         }
 
-        // Antenna with color-changing beacon light (Violet/Cyan pulsing when thinking!)
-        ctx.beginPath();
-        ctx.moveTo(0, headY);
-        ctx.lineTo(0, headY - 8);
-        ctx.strokeStyle = curThinking ? '#C084FC' : '#9CA3AF';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        const beaconPulse = (Math.sin(animTimeRef.current * (curVictory ? 16 : curThinking ? 14 : 8)) + 1) * 0.5;
-        if (curThinking) {
-          // Outer radiant glow & spinning loading ring around antenna lamp
-          ctx.beginPath();
-          ctx.arc(0, headY - 9, 7 + beaconPulse * 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(192, 132, 252, ${0.2 + beaconPulse * 0.22})`;
-          ctx.fill();
-
+        // Wireless Command Signal Waves curving above Head when processing
+        if (isProcessingCode) {
+          const waveProgress = (animTimeRef.current * 2.2) % 1;
+          const waveOriginY = shape === 'QUANTUM_PRIME' || shape === 'ORBITAL_SAT' ? headY - 7 : headY - 2;
           ctx.save();
-          ctx.translate(0, headY - 9);
-          ctx.rotate(animTimeRef.current * 6.5);
-          ctx.beginPath();
-          ctx.arc(0, 0, 6.8, 0, Math.PI * 1.25);
-          ctx.strokeStyle = '#38BDF8';
+          ctx.strokeStyle = curThinking ? '#E879F9' : curSkin.accentColor;
+          ctx.globalAlpha = Math.max(0.15, 1 - waveProgress);
           ctx.lineWidth = 1.6;
           ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.arc(0, waveOriginY, 7 + waveProgress * 7, Math.PI * 1.22, Math.PI * 1.78);
+          ctx.stroke();
+
+          ctx.strokeStyle = curSkin.visorColor;
+          ctx.globalAlpha = Math.max(0.1, (1 - waveProgress) * 0.75);
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(0, waveOriginY, 10 + waveProgress * 9, Math.PI * 1.25, Math.PI * 1.75);
           ctx.stroke();
           ctx.restore();
+
+          if (curThinking) {
+            ctx.save();
+            ctx.translate(0, waveOriginY - 8);
+            ctx.rotate(animTimeRef.current * 6.5);
+            ctx.beginPath();
+            ctx.arc(0, 0, 5.2, 0, Math.PI * 1.25);
+            ctx.strokeStyle = '#38BDF8';
+            ctx.lineWidth = 1.6;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            ctx.restore();
+          }
         }
 
-        ctx.beginPath();
-        ctx.arc(0, headY - 9, curVictory ? 4.5 : curThinking ? 4.2 : 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = curVictory
-          ? `rgba(16, 185, 129, ${0.85 + beaconPulse * 0.15})`
-          : curThinking
-          ? beaconPulse > 0.5
-            ? `rgba(232, 121, 249, ${0.85 + beaconPulse * 0.15})`
-            : `rgba(56, 189, 248, ${0.85 + (1 - beaconPulse) * 0.15})`
-          : `rgba(251, 191, 36, ${0.8 + beaconPulse * 0.2})`;
-        ctx.fill();
+        // Floating Micro Command Hologram Badge when a code step triggers
+        if (r.commandPulse > 0.12 && r.commandLabel && !curVictory && !curThinking) {
+          const popProgress = 1 - r.commandPulse;
+          const badgeY = headY - (shape === 'QUANTUM_PRIME' || shape === 'ORBITAL_SAT' ? 20 : 16) - popProgress * 10;
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, r.commandPulse * 1.4);
+          ctx.beginPath();
+          drawRoundRect(ctx, -11, badgeY - 7, 22, 13, 5);
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+          ctx.fill();
+          ctx.strokeStyle = curSkin.accentColor;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          ctx.fillStyle = curSkin.shellLightColor;
+          ctx.font = 'bold 8px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(r.commandLabel, 0, badgeY - 0.5);
+          ctx.restore();
+        }
 
         // Floating Thought Bubble + Loading Indicator above 3D robot when thinking
         if (curThinking) {
           const floatOffset = Math.sin(animTimeRef.current * 6) * 1.5;
-          const bubbleY = headY - 28 + floatOffset;
+          const bubbleY = headY - (shape === 'QUANTUM_PRIME' || shape === 'ORBITAL_SAT' ? 33 : 29) + floatOffset;
 
-          // Rising mini thought dots
           ctx.fillStyle = 'rgba(192, 132, 252, 0.9)';
           ctx.beginPath();
-          ctx.arc(5, headY - 15, 1.4, 0, Math.PI * 2);
-          ctx.arc(8, headY - 19, 2, 0, Math.PI * 2);
+          ctx.arc(5, bubbleY + 13, 1.4, 0, Math.PI * 2);
+          ctx.arc(8, bubbleY + 9, 2, 0, Math.PI * 2);
           ctx.fill();
 
-          // Thought pill background
           ctx.beginPath();
           drawRoundRect(ctx, -16, bubbleY - 8, 34, 15, 7);
           ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
@@ -1268,7 +2056,6 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
           ctx.lineWidth = 1.4;
           ctx.stroke();
 
-          // Mini spinning loader arc on left inside pill
           const isBranchLogic =
             curActiveAction === 'IF_VAR' ||
             curActiveAction === 'IF_COLOR' ||
@@ -1284,7 +2071,6 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
           ctx.stroke();
           ctx.restore();
 
-          // 3 staggered bouncing loading dots inside thought pill
           for (let d = 0; d < 3; d++) {
             const dotWave = Math.sin(animTimeRef.current * 10 - d * 1.1);
             const dotY = bubbleY - 0.5 - Math.max(0, dotWave) * 2.2;
@@ -1294,19 +2080,6 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
             ctx.fill();
           }
         }
-
-        // Direction pointer
-        ctx.save();
-        ctx.translate(0, 6);
-        ctx.rotate(angle);
-        ctx.beginPath();
-        ctx.moveTo(14, 0);
-        ctx.lineTo(8, -4);
-        ctx.lineTo(8, 4);
-        ctx.closePath();
-        ctx.fillStyle = curThinking ? '#C084FC' : '#F59E0B';
-        ctx.fill();
-        ctx.restore();
 
         ctx.restore();
       };
@@ -1511,11 +2284,11 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
     };
   }, []);
 
-  // Unified Pointer pan handlers (supports both touch drag on mobile & mouse drag on desktop)
+  // Unified Pointer pan handlers (ref-backed for zero React re-renders during drag)
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.target !== canvasRef.current) return;
     isDraggingRef.current = true;
-    dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+    dragStartRef.current = { x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y };
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     } catch {}
@@ -1523,10 +2296,10 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDraggingRef.current) return;
-    setPan({
+    panRef.current = {
       x: e.clientX - dragStartRef.current.x,
       y: e.clientY - dragStartRef.current.y,
-    });
+    };
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
@@ -1556,7 +2329,7 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
   const handleResetView = () => {
     sounds.playClick();
     setZoom(1);
-    setPan({ x: 0, y: 0 });
+    panRef.current = { x: 0, y: 0 };
     setRotationAngle(0);
   };
 
@@ -1607,11 +2380,45 @@ export const IsometricCanvas: React.FC<IsometricCanvasProps> = React.memo(({
         <canvas ref={canvasRef} className="w-full h-full block touch-none" />
 
         {/* Floating Odibot Mascot Speech Bubble HUD (compact on mobile so grid stays clear) */}
-        <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-auto flex items-center gap-2 p-1.5 sm:p-2 bg-slate-900/95 border border-slate-700/80 rounded-xl sm:rounded-2xl shadow-lg pointer-events-auto max-w-md">
-          <OdibotMascot size="sm" className="shrink-0" />
+        <div
+          className={`absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-auto flex items-center gap-2 p-1.5 sm:p-2 bg-slate-900/95 border rounded-xl sm:rounded-2xl shadow-lg pointer-events-auto max-w-md transition-colors ${
+            isSimulating && !victoryActive ? 'border-cyan-500/65' : 'border-slate-700/80'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={triggerOdibotVoiceGreet}
+            title="Klik untuk mendengar suara robot Odibot!"
+            className="shrink-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-cyan-400/70 active:scale-95 transition-transform cursor-pointer"
+          >
+            <OdibotMascot
+              size="sm"
+              skinId={skinId}
+              animated={isSimulating || isGreetingVoice || victoryActive}
+              mood={
+                victoryActive || isGreetingVoice
+                  ? 'happy'
+                  : isThinking
+                  ? 'thinking'
+                  : activeAction === 'JUMP'
+                  ? 'jumping'
+                  : isSimulating
+                  ? 'processing'
+                  : 'idle'
+              }
+            />
+          </button>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-[10px] font-bold text-cyan-400 tracking-wide">
               <span className="truncate">Odibot</span>
+              <button
+                type="button"
+                onClick={triggerOdibotVoiceGreet}
+                title="Bunyikan suara robot Odibot"
+                className="inline-flex items-center justify-center p-0.5 rounded hover:bg-slate-800 text-cyan-300 hover:text-amber-300 transition-colors"
+              >
+                <Volume2 className="w-3 h-3" />
+              </button>
               <span className="text-slate-600" aria-hidden="true">·</span>
               <span className="text-slate-300 font-mono truncate tabular-nums">
                 ({robotState.x},{robotState.y}) {dirInIndonesian[robotState.dir].split(' ')[0]}

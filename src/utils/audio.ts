@@ -77,6 +77,125 @@ class SoundSystem {
     return this.isMuted;
   }
 
+  private lastRobotVoiceAt: number = 0;
+
+  // Synthesize expressive droid vocal syllable using carrier + FM vibrato + dual vowel formant filters
+  private synthesizeRobotSyllable(
+    ctx: AudioContext,
+    startTime: number,
+    freqStart: number,
+    freqEnd: number,
+    duration: number,
+    f1Freq: number,
+    f2Freq: number,
+    volume: number = 0.14,
+    waveType: OscillatorType = 'sawtooth'
+  ) {
+    const carrier = ctx.createOscillator();
+    const fmMod = ctx.createOscillator();
+    const fmGain = ctx.createGain();
+    const formant1 = ctx.createBiquadFilter();
+    const formant2 = ctx.createBiquadFilter();
+    const masterGain = ctx.createGain();
+
+    carrier.type = waveType;
+    carrier.frequency.setValueAtTime(freqStart, startTime);
+    carrier.frequency.exponentialRampToValueAtTime(Math.max(60, freqEnd), startTime + duration);
+
+    // Subtle robotic FM chirp / warble
+    fmMod.type = 'sine';
+    fmMod.frequency.setValueAtTime(38, startTime);
+    fmGain.gain.setValueAtTime(16, startTime);
+    fmMod.connect(fmGain);
+    fmGain.connect(carrier.frequency);
+
+    // Dual vowel formant bandpass filters give unmistakable talking-robot timbre
+    formant1.type = 'bandpass';
+    formant1.frequency.setValueAtTime(f1Freq, startTime);
+    formant1.Q.setValueAtTime(3.2, startTime);
+
+    formant2.type = 'bandpass';
+    formant2.frequency.setValueAtTime(f2Freq, startTime);
+    formant2.Q.setValueAtTime(4.0, startTime);
+
+    masterGain.gain.setValueAtTime(0.001, startTime);
+    masterGain.gain.linearRampToValueAtTime(volume, startTime + Math.min(0.018, duration * 0.22));
+    masterGain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+    carrier.connect(formant1);
+    carrier.connect(formant2);
+    formant1.connect(masterGain);
+    formant2.connect(masterGain);
+    masterGain.connect(ctx.destination);
+
+    carrier.start(startTime);
+    fmMod.start(startTime);
+    carrier.stop(startTime + duration + 0.02);
+    fmMod.stop(startTime + duration + 0.02);
+  }
+
+  public playRobotGreet() {
+    this.withCtx((ctx) => {
+      const nowMs = performance.now();
+      if (nowMs - this.lastRobotVoiceAt < 260) return;
+      this.lastRobotVoiceAt = nowMs;
+
+      const now = ctx.currentTime;
+      // Cheerful 3-syllable droid greeting: "Bi-bu-bii!"
+      this.synthesizeRobotSyllable(ctx, now, 340, 460, 0.075, 580, 1750, 0.16, 'sawtooth');
+      this.synthesizeRobotSyllable(ctx, now + 0.085, 290, 360, 0.07, 440, 1180, 0.14, 'sawtooth');
+      this.synthesizeRobotSyllable(ctx, now + 0.165, 440, 680, 0.13, 660, 2150, 0.17, 'sawtooth');
+    });
+  }
+
+  public playRobotProcess(kind: 'logic' | 'var' | 'func' = 'logic') {
+    this.withCtx((ctx) => {
+      const nowMs = performance.now();
+      if (nowMs - this.lastRobotVoiceAt < 170) return;
+      this.lastRobotVoiceAt = nowMs;
+
+      const now = ctx.currentTime;
+      if (kind === 'func') {
+        // Quick bright droid call: "Fii-bop!"
+        this.synthesizeRobotSyllable(ctx, now, 420, 600, 0.055, 620, 1980, 0.11, 'square');
+        this.synthesizeRobotSyllable(ctx, now + 0.06, 520, 680, 0.065, 720, 2200, 0.11, 'sawtooth');
+      } else if (kind === 'var') {
+        // Digital memory chirp: "Bip-dat!"
+        this.synthesizeRobotSyllable(ctx, now, 360, 480, 0.05, 520, 1600, 0.1, 'triangle');
+        this.synthesizeRobotSyllable(ctx, now + 0.055, 480, 420, 0.055, 680, 1900, 0.1, 'sawtooth');
+      } else {
+        // Logic scan: "Tik-bii!"
+        this.synthesizeRobotSyllable(ctx, now, 380, 520, 0.05, 560, 1850, 0.1, 'sawtooth');
+        this.synthesizeRobotSyllable(ctx, now + 0.055, 500, 640, 0.06, 700, 2100, 0.1, 'sawtooth');
+      }
+    });
+  }
+
+  public playRobotCheer() {
+    this.withCtx((ctx) => {
+      this.lastRobotVoiceAt = performance.now();
+      const now = ctx.currentTime;
+      // Joyful 4-syllable droid victory cheer: "Wi-hii-bi-bop!"
+      this.synthesizeRobotSyllable(ctx, now, 380, 540, 0.07, 560, 1750, 0.16, 'sawtooth');
+      this.synthesizeRobotSyllable(ctx, now + 0.08, 480, 720, 0.09, 720, 2150, 0.17, 'sawtooth');
+      this.synthesizeRobotSyllable(ctx, now + 0.18, 560, 780, 0.08, 660, 2000, 0.16, 'sawtooth');
+      this.synthesizeRobotSyllable(ctx, now + 0.27, 640, 920, 0.15, 780, 2350, 0.18, 'sawtooth');
+    });
+  }
+
+  public playRobotOops() {
+    this.withCtx((ctx) => {
+      const nowMs = performance.now();
+      if (nowMs - this.lastRobotVoiceAt < 220) return;
+      this.lastRobotVoiceAt = nowMs;
+
+      const now = ctx.currentTime;
+      // Cute descending droid groan: "Bwooo-uh?"
+      this.synthesizeRobotSyllable(ctx, now, 340, 180, 0.14, 480, 1150, 0.16, 'sawtooth');
+      this.synthesizeRobotSyllable(ctx, now + 0.15, 210, 130, 0.16, 400, 920, 0.15, 'sawtooth');
+    });
+  }
+
   public playClick() {
     this.withCtx((ctx) => {
       const osc = ctx.createOscillator();
@@ -84,10 +203,10 @@ class SoundSystem {
       const now = ctx.currentTime;
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, now);
-      osc.frequency.exponentialRampToValueAtTime(400, now + 0.04);
+      osc.frequency.setValueAtTime(820, now);
+      osc.frequency.exponentialRampToValueAtTime(430, now + 0.04);
 
-      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.setValueAtTime(0.11, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
 
       osc.connect(gain);
@@ -100,85 +219,73 @@ class SoundSystem {
 
   public playStep() {
     this.withCtx((ctx) => {
+      const now = ctx.currentTime;
+      // Soft hover servo pulse + cute micro-step chirp
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      const now = ctx.currentTime;
 
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(280, now);
-      osc.frequency.exponentialRampToValueAtTime(140, now + 0.08);
+      osc.frequency.setValueAtTime(260, now);
+      osc.frequency.exponentialRampToValueAtTime(145, now + 0.075);
 
-      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.setValueAtTime(0.15, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
-
       osc.start(now);
-      osc.stop(now + 0.09);
+      osc.stop(now + 0.085);
+
+      this.synthesizeRobotSyllable(ctx, now + 0.01, 310, 390, 0.045, 550, 1650, 0.055, 'sawtooth');
     });
   }
 
   public playTurn() {
     this.withCtx((ctx) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const now = ctx.currentTime;
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(350, now);
-      osc.frequency.exponentialRampToValueAtTime(520, now + 0.09);
-
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(now);
-      osc.stop(now + 0.1);
-    });
-  }
-
-  public playThink() {
-    this.withCtx((ctx) => {
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(640, now);
-      osc.frequency.setValueAtTime(880, now + 0.035);
+      osc.frequency.setValueAtTime(340, now);
+      osc.frequency.exponentialRampToValueAtTime(540, now + 0.08);
 
-      gain.gain.setValueAtTime(0.055, now);
+      gain.gain.setValueAtTime(0.1, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
-
       osc.start(now);
       osc.stop(now + 0.09);
+
+      this.synthesizeRobotSyllable(ctx, now + 0.01, 410, 520, 0.05, 620, 1900, 0.06, 'triangle');
     });
+  }
+
+  public playThink() {
+    this.playRobotProcess('logic');
   }
 
   public playJump() {
     this.withCtx((ctx) => {
+      const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      const now = ctx.currentTime;
 
       osc.type = 'sine';
       osc.frequency.setValueAtTime(260, now);
-      osc.frequency.exponentialRampToValueAtTime(640, now + 0.15);
+      osc.frequency.exponentialRampToValueAtTime(660, now + 0.14);
 
-      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.setValueAtTime(0.16, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
-
       osc.start(now);
       osc.stop(now + 0.16);
+
+      // Cheerful droid "Wiii!" jump vocalization
+      this.synthesizeRobotSyllable(ctx, now + 0.015, 360, 680, 0.11, 640, 2100, 0.11, 'sawtooth');
     });
   }
 
@@ -196,7 +303,7 @@ class SoundSystem {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, startTime);
 
-        gain.gain.setValueAtTime(0.2, startTime);
+        gain.gain.setValueAtTime(0.18, startTime);
         gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.22);
 
         osc.connect(gain);
@@ -205,6 +312,9 @@ class SoundSystem {
         osc.start(startTime);
         osc.stop(startTime + 0.23);
       });
+
+      // Happy droid exclamation: "Bii-hap!"
+      this.synthesizeRobotSyllable(ctx, now + 0.02, 520, 780, 0.09, 720, 2250, 0.11, 'sawtooth');
     });
   }
 
@@ -218,14 +328,16 @@ class SoundSystem {
       osc.frequency.setValueAtTime(320, now);
       osc.frequency.setValueAtTime(480, now + 0.08);
 
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
       osc.start(now);
-      osc.stop(now + 0.22);
+      osc.stop(now + 0.2);
+
+      this.synthesizeRobotSyllable(ctx, now + 0.02, 400, 560, 0.08, 600, 1850, 0.09, 'sawtooth');
     });
   }
 
@@ -239,7 +351,7 @@ class SoundSystem {
       osc.frequency.setValueAtTime(150, now);
       osc.frequency.exponentialRampToValueAtTime(70, now + 0.12);
 
-      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.setValueAtTime(0.18, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
 
       osc.connect(gain);
@@ -248,6 +360,7 @@ class SoundSystem {
       osc.start(now);
       osc.stop(now + 0.13);
     });
+    this.playRobotOops();
   }
 
   public playVictory() {
@@ -313,6 +426,7 @@ class SoundSystem {
         osc.stop(start + n.d + 0.02);
       });
     });
+    this.playRobotCheer();
   }
 
   // Satisfying ascending chime for each star revealed 1 -> 2 -> 3
@@ -384,7 +498,7 @@ class SoundSystem {
       osc.frequency.setValueAtTime(190, now);
       osc.frequency.setValueAtTime(140, now + 0.1);
 
-      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.setValueAtTime(0.16, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
 
       osc.connect(gain);
@@ -393,6 +507,7 @@ class SoundSystem {
       osc.start(now);
       osc.stop(now + 0.26);
     });
+    this.playRobotOops();
   }
 }
 

@@ -1,13 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { TOTAL_LEVELS_COUNT } from './data/constants';
 import { getBadgeStatuses, syncUnlockedBadges } from './data/badges';
-import { auth } from './firebase';
-import {
-  fetchUserCloudProgress,
-  mergeUserProgress,
-  syncUserProgressAndLeaderboard,
-} from './services/leaderboardService';
+import { subscribeCloudAuthSync, syncProgressIfSignedIn } from './services/cloudSyncLoader';
 import { RobotSkinId, UserProgress } from './types/game';
 import { sounds } from './utils/audio';
 import {
@@ -101,51 +95,36 @@ export default function App() {
   const [activeConceptTopic, setActiveConceptTopic] = useState<string | undefined>(undefined);
   const [isMuted, setIsMuted] = useState(() => sounds.getMuted());
 
-  // Keep Firebase Auth state & cloud leaderboard hydrated on reload
+  // Defer Firebase Auth SDK loading until after first paint so startup never stalls
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (!firebaseUser || !firebaseUser.emailVerified) {
-        return;
-      }
-      try {
-        const cloudPartial = await fetchUserCloudProgress(firebaseUser.uid);
-        setProgress((prev) => {
-          const merged = mergeUserProgress(prev, cloudPartial);
-          const displayName =
-            merged.userProfile?.displayName ||
-            firebaseUser.displayName ||
-            firebaseUser.email?.split('@')[0] ||
-            'Penjelajah Odibot';
-          const updated: UserProgress = {
-            ...merged,
-            userProfile: {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || merged.userProfile?.email || '',
-              displayName: displayName.slice(0, 40),
-              avatarUrl: firebaseUser.photoURL || merged.userProfile?.avatarUrl,
-              lastSynced: new Date().toLocaleTimeString('id-ID', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-              }),
-            },
-          };
-          try {
-            localStorage.setItem('kodibot_progress', JSON.stringify(updated));
-          } catch {}
-          void syncUserProgressAndLeaderboard(
-            firebaseUser.uid,
-            updated.userProfile?.email || '',
-            updated.userProfile?.displayName || displayName,
-            updated
-          ).catch(() => {});
-          return updated;
-        });
-      } catch {
-        // Ignore silent background sync errors on boot
-      }
-    });
-    return () => unsubscribe();
+    let cleanupAuth: (() => void) | null = null;
+    let cancelled = false;
+
+    const startSync = () => {
+      if (cancelled) return;
+      cleanupAuth = subscribeCloudAuthSync(setProgress);
+    };
+
+    const win = window as unknown as {
+      requestIdleCallback?: (fn: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (typeof win.requestIdleCallback === 'function') {
+      const idleId = win.requestIdleCallback(startSync, { timeout: 1400 });
+      return () => {
+        cancelled = true;
+        win.cancelIdleCallback?.(idleId);
+        cleanupAuth?.();
+      };
+    }
+
+    const timerId = window.setTimeout(startSync, 900);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+      cleanupAuth?.();
+    };
   }, []);
 
   const totalStars = useMemo(
@@ -228,15 +207,7 @@ export default function App() {
       try {
         localStorage.setItem('kodibot_progress', JSON.stringify(updated));
       } catch {}
-      const firebaseUser = auth.currentUser;
-      if (firebaseUser && firebaseUser.emailVerified) {
-        void syncUserProgressAndLeaderboard(
-          firebaseUser.uid,
-          firebaseUser.email || updated.userProfile?.email || '',
-          updated.userProfile?.displayName || firebaseUser.displayName || 'Penjelajah Odibot',
-          updated
-        ).catch(() => {});
-      }
+      void syncProgressIfSignedIn(updated);
       return updated;
     });
   }, []);

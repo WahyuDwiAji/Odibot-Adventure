@@ -25,49 +25,51 @@ export const loadLeaderboardModal = () =>
 let idlePrefetchStarted = false;
 let playingPrefetchStarted = false;
 
-const scheduleIdle = (cb: () => void, timeoutMs: number) => {
+const scheduleIdle = (cb: () => void, delayMs: number) => {
   if (typeof window === 'undefined') return;
   const win = window as unknown as {
     requestIdleCallback?: (fn: () => void, opts?: { timeout: number }) => number;
   };
-  if (typeof win.requestIdleCallback === 'function') {
-    win.requestIdleCallback(cb, { timeout: timeoutMs });
-  } else {
-    window.setTimeout(cb, Math.min(timeoutMs, 250));
-  }
+  const runWhenIdle = () => {
+    if (typeof win.requestIdleCallback === 'function') {
+      win.requestIdleCallback(cb, { timeout: 2000 });
+    } else {
+      window.setTimeout(cb, 250);
+    }
+  };
+  window.setTimeout(runWhenIdle, delayMs);
 };
 
 /**
- * Quietly prefetch TitleScreen menus and GameSession right after initial paint.
+ * Quietly prefetch ONLY GameSession after initial paint & user-idle gap.
+ * Secondary modals prefetch instantaneously on hover/touch via TitleScreen buttons.
  */
 export function prefetchIdleChunks() {
   if (idlePrefetchStarted) return;
   idlePrefetchStarted = true;
 
-  scheduleIdle(() => {
-    void loadGuideModal();
-    void loadConceptModal();
-    void loadSkinSelectorModal();
-    void loadGoogleCloudSyncModal();
-    void loadLeaderboardModal();
-
+  const start = () => {
     scheduleIdle(() => {
-      void loadLevelSelectModal();
       void loadGameSession();
-    }, 900);
-  }, 450);
+    }, 1200);
+  };
+
+  if (typeof document !== 'undefined' && document.readyState !== 'complete') {
+    window.addEventListener('load', start, { once: true });
+  } else {
+    start();
+  }
 }
 
 /**
- * Prefetch in-game modals once the user enters a mission.
+ * Prefetch core in-game modals gently once the user is inside a mission.
  */
 export function prefetchPlayingModals() {
   if (playingPrefetchStarted) return;
   playingPrefetchStarted = true;
 
   scheduleIdle(() => {
-    void loadHintModal();
     void loadVictoryModal();
-    void loadSandboxEditor();
-  }, 600);
+    void loadHintModal();
+  }, 1400);
 }

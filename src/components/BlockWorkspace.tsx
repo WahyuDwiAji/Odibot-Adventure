@@ -127,13 +127,13 @@ export const BlockWorkspace: React.FC<BlockWorkspaceProps> = React.memo(({
       `[data-block-id="${targetId}"]`
     ) as HTMLElement | null;
     if (el) {
-      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      el.scrollIntoView({ block: 'nearest', behavior: isSimulating ? 'auto' : 'smooth' });
     }
     if (lastAddedBlockId) {
       const t = setTimeout(() => setLastAddedBlockId(null), 350);
       return () => clearTimeout(t);
     }
-  }, [activeExecutingBlockId, lastAddedBlockId]);
+  }, [activeExecutingBlockId, lastAddedBlockId, isSimulating]);
 
   const totalUsedBlocks = countTotalBlocks(mainBlocks, f1Blocks, f2Blocks);
   const [threeStarLimit, twoStarLimit] = getLevelThresholds(level);
